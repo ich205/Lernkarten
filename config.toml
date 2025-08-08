@@ -1,0 +1,38 @@
+# Konfiguration für GSA Flashcards
+
+[models]
+# Platzhalter-IDs – bitte ggf. anpassen:
+label_model = "gpt-5-nano"
+qa_model    = "gpt-5-mini"   # oder "gpt-5" für höchste Qualität
+use_json_mode = true
+max_parallel_requests = 3
+
+[chunking]
+target_tokens = 600          # grobe Zielgröße pro Chunk
+overlap_tokens = 60
+max_chars_per_chunk = 4000   # Sicherheitsgrenze, falls Token-Estimator fehlt
+
+[prompting]
+language = "de"              # "de" | "en" | ...
+tone = "sachlich, prüfungsorientiert, präzise"
+max_questions_per_chunk_default = 8
+
+[costs]
+# Preise laut Ihrer Vorgabe (USD pro 1 Mio Tokens)
+# GPT-5
+gpt-5_input_usd_per_mtok = 1250.0
+gpt-5_cached_input_usd_per_mtok = 0.125
+gpt-5_output_usd_per_mtok = 10000.0
+
+# GPT-5 Mini
+gpt-5-mini_input_usd_per_mtok = 250.0
+gpt-5-mini_cached_input_usd_per_mtok = 0.025
+gpt-5-mini_output_usd_per_mtok = 2000.0
+
+# GPT-5 Nano
+gpt-5-nano_input_usd_per_mtok = 50.0
+gpt-5-nano_cached_input_usd_per_mtok = 0.005
+gpt-5-nano_output_usd_per_mtok = 400.0
+
+[ui]
+theme = "auto"    # "auto" | "light" | "dark"
