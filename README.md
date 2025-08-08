@@ -30,6 +30,13 @@ und CSV (z. B. für Anki).
    - macOS/Linux: `bash run.sh`
 4. In der GUI: **Skript wählen**, **API‑Key eingeben**, **Gründlichkeit** & **Budget** setzen, **Schätzen** → **Start**.
 
+## Installation aus ZIP
+1. `Lernkarten.zip` und `installer.py` in denselben Ordner legen.
+2. `python installer.py` ausführen – das Archiv wird entpackt, Abhängigkeiten werden installiert und Startdateien (`start.*`) werden angelegt.
+3. Starten:
+   - Windows: `start.bat`
+   - macOS/Linux: `./start.sh` oder `python start.py`
+
 ## Modelle & Preise
 Die Preise stammen aus Ihrer Vorgabe und sind in `config.toml` hinterlegt. Falls Ihr Account / Ihr Modell andere Preise hat, passen Sie sie bitte dort an. Die Kostenschätzung basiert auf
 geschätzten Eingabe‑/Ausgabe‑Tokens und differenziert zwischen *Eingabe*, *Zwischengespeicherte Eingabe* und *Ausgabe*. Für die meisten Workloads wird *Eingabe*+*Ausgabe* angesetzt.
