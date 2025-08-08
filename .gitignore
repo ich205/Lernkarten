@@ -2,3 +2,8 @@
 __pycache__/
 *.pyc
 output.xlsx
+# Distribution artifacts
+Lernkarten.zip
+start.sh
+start.bat
+start.py
