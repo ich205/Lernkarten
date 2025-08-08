@@ -17,7 +17,7 @@ und CSV (z. B. für Anki).
 - **Cache**: Ergebnisse pro Segment werden gehasht und wiederverwendet.
 - **Exports**: Excel (`.xlsx`) mit Spalten: *Original*, *Frage*, *Antwort*, *Labels*, *Quelle*;
   zusätzlich CSV‑Export für Flashcards.
-- **Installer‑Pfad**: `install.py` (venv + requirements) und **PyInstaller**‑Skript für Windows.
+- **Installer‑Pfad**: `install.py` (ZIP-Entpacken, venv + requirements) und **PyInstaller**‑Skript für Windows.
 
 ## Schnellstart
 1. **Python 3.10+** installieren.
@@ -31,8 +31,8 @@ und CSV (z. B. für Anki).
 4. In der GUI: **Skript wählen**, **API‑Key eingeben**, **Gründlichkeit** & **Budget** setzen, **Schätzen** → **Start**.
 
 ## Installation aus ZIP
-1. `Lernkarten.zip` und `installer.py` in denselben Ordner legen.
-2. `python installer.py` ausführen – das Archiv wird entpackt, Abhängigkeiten werden installiert und Startdateien (`start.*`) werden angelegt.
+1. `Lernkarten.zip` und `install.py` in denselben Ordner legen.
+2. `python install.py` ausführen – das Archiv wird entpackt, Abhängigkeiten werden installiert und Startdateien (`start.*`) werden angelegt.
 3. Starten:
    - Windows: `start.bat`
    - macOS/Linux: `./start.sh` oder `python start.py`
