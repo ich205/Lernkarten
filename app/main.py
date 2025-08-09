@@ -12,17 +12,17 @@ from tkinter import (
     StringVar,
     IntVar,
     BooleanVar,
-    Text,
     END,
     N,
     S,
     E,
     W,
-    messagebox,
     TclError,
 )
 import ttkbootstrap as tb
 from ttkbootstrap import ttk
+from ttkbootstrap.scrolled import ScrolledText
+from ttkbootstrap.toast import ToastNotification
 from app.theme import make_root, attach_theme_toggle
 from pypdf.errors import PdfReadError
 from openai import OpenAIError
@@ -56,7 +56,6 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title(APP_TITLE)
-        root.geometry("920x640")
 
         self.file_path = StringVar(value="")
         key, source = load_api_key()
@@ -79,10 +78,11 @@ class App:
 
         self.build_ui()
         if source in {"config", "file"}:
-            messagebox.showwarning(
-                APP_TITLE,
-                "API-Key wurde aus einer Datei geladen. Speicherung im Klartext ist riskant.",
-            )
+            ToastNotification(
+                title=APP_TITLE,
+                message="API-Key wurde aus einer Datei geladen. Speicherung im Klartext ist riskant.",
+                bootstyle="warning",
+            ).show_toast()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def build_ui(self):
@@ -93,30 +93,30 @@ class App:
 
         # Row 0: Datei
         ttk.Label(frm, text="Skript (PDF):").grid(row=0, column=0, sticky=W)
-        ttk.Entry(frm, textvariable=self.file_path, width=80).grid(row=0, column=1, sticky=(E,W))
+        ttk.Entry(frm, textvariable=self.file_path).grid(row=0, column=1, sticky=(E,W))
         ttk.Button(frm, text="Auswaehlen…", command=self.pick_file).grid(row=0, column=2, padx=5)
         frm.columnconfigure(1, weight=1)
 
         # Row 1: API Key
         ttk.Label(frm, text="OpenAI API-Key:").grid(row=1, column=0, sticky=W, pady=(8,0))
-        ttk.Entry(frm, textvariable=self.api_key, width=50, show="•").grid(row=1, column=1, sticky=(E,W), pady=(8,0))
+        ttk.Entry(frm, textvariable=self.api_key, show="•").grid(row=1, column=1, sticky=(E,W), pady=(8,0))
         ttk.Label(
             frm,
             text="⚠ wird nicht gespeichert",
-            foreground="red",
+            bootstyle="danger",
         ).grid(row=1, column=2, sticky=W, pady=(8,0))
 
         # Row 2: Modelle
         model_values = (GPT5, GPT5_MINI, GPT5_NANO)
         ttk.Label(frm, text="Klassifikation (Nano):").grid(row=2, column=0, sticky=W, pady=(8,0))
-        ttk.Combobox(frm, textvariable=self.classify_model, values=model_values, width=20).grid(row=2, column=1, sticky=W, pady=(8,0))
+        ttk.Combobox(frm, textvariable=self.classify_model, values=model_values).grid(row=2, column=1, sticky=W, pady=(8,0))
 
         ttk.Label(frm, text="Lernkarten (Mini/5):").grid(row=3, column=0, sticky=W)
-        ttk.Combobox(frm, textvariable=self.qa_model, values=model_values, width=20).grid(row=3, column=1, sticky=W)
+        ttk.Combobox(frm, textvariable=self.qa_model, values=model_values).grid(row=3, column=1, sticky=W)
 
         # Row 4: Sprache
         ttk.Label(frm, text="Sprache:").grid(row=4, column=0, sticky=W)
-        ttk.Combobox(frm, textvariable=self.language, values=("de","en"), width=10).grid(row=4, column=1, sticky=W)
+        ttk.Combobox(frm, textvariable=self.language, values=("de","en")).grid(row=4, column=1, sticky=W)
 
         # Row 5: Slider
         ttk.Label(frm, text="Max. Karten pro Segment:").grid(row=5, column=0, sticky=W, pady=(8,0))
@@ -140,7 +140,7 @@ class App:
 
         # Row 8: Log
         ttk.Label(frm, text="Protokoll:").grid(row=8, column=0, sticky=W)
-        self.log = Text(frm, height=15)
+        self.log = ScrolledText(frm, wrap="word")
         self.log.grid(row=9, column=0, columnspan=3, sticky=(N,S,E,W))
         frm.rowconfigure(9, weight=1)
 
@@ -151,17 +151,17 @@ class App:
 
         # Row 12+: Vorschau der aktuellen Karte
         ttk.Label(frm, text="Originaltext:").grid(row=12, column=0, sticky=W, pady=(8,0))
-        self.preview_orig = Text(frm, height=3, wrap="word")
+        self.preview_orig = tb.Text(frm, wrap="word")
         self.preview_orig.grid(row=13, column=0, columnspan=3, sticky=(E,W))
         self.preview_orig.configure(state="disabled")
 
         ttk.Label(frm, text="Frage:").grid(row=14, column=0, sticky=W, pady=(4,0))
-        self.preview_frage = Text(frm, height=2, wrap="word")
+        self.preview_frage = tb.Text(frm, wrap="word")
         self.preview_frage.grid(row=15, column=0, columnspan=3, sticky=(E,W))
         self.preview_frage.configure(state="disabled")
 
         ttk.Label(frm, text="Antwort:").grid(row=16, column=0, sticky=W, pady=(4,0))
-        self.preview_antwort = Text(frm, height=2, wrap="word")
+        self.preview_antwort = tb.Text(frm, wrap="word")
         self.preview_antwort.grid(row=17, column=0, columnspan=3, sticky=(E,W))
         self.preview_antwort.configure(state="disabled")
 
@@ -205,7 +205,7 @@ class App:
     def segment_and_estimate(self):
         path = self.file_path.get().strip()
         if not path or not os.path.exists(path):
-            messagebox.showerror(APP_TITLE, "Bitte eine PDF-Datei waehlen.")
+            ToastNotification(title=APP_TITLE, message="Bitte eine PDF-Datei waehlen.", bootstyle="danger").show_toast()
             return
         self.progress.set("Lese & segmentiere ...")
         self.root.update()
@@ -228,7 +228,11 @@ class App:
             self.update_cost_label()
         except (OSError, ValueError, PdfReadError) as e:
             logger.exception("Fehler bei Segmentierung")
-            messagebox.showerror(APP_TITLE, f"Fehler bei Segmentierung: {e.__class__.__name__}: {e}")
+            ToastNotification(
+                title=APP_TITLE,
+                message=f"Fehler bei Segmentierung: {e.__class__.__name__}: {e}",
+                bootstyle="danger",
+            ).show_toast()
             self.progress.set("Fehler.")
             return
 
@@ -271,10 +275,10 @@ class App:
 
     def start_pipeline(self):
         if not self._segments:
-            messagebox.showinfo(APP_TITLE, "Bitte zuerst segmentieren & schaetzen.")
+            ToastNotification(title=APP_TITLE, message="Bitte zuerst segmentieren & schaetzen.", bootstyle="info").show_toast()
             return
         if not self.api_key.get().strip():
-            messagebox.showerror(APP_TITLE, "Bitte OpenAI API-Key eingeben (wird nicht gespeichert).")
+            ToastNotification(title=APP_TITLE, message="Bitte OpenAI API-Key eingeben (wird nicht gespeichert).", bootstyle="danger").show_toast()
             return
         self._stop_flag = False
         self._pause_event.set()
@@ -363,10 +367,14 @@ class App:
             pipe.export_excel(rows, out_path)
             self.progress.set(f"Fertig. Export: {out_path}")
             self.logln(f"Exportiert nach: {out_path}")
-            messagebox.showinfo(APP_TITLE, f"Fertig! Datei gespeichert:\n{out_path}")
+            ToastNotification(title=APP_TITLE, message=f"Fertig! Datei gespeichert:\n{out_path}", bootstyle="success").show_toast()
         except (OSError, ValueError, RuntimeError, OpenAIError) as e:
             logger.exception("Fehler in der Pipeline")
-            messagebox.showerror(APP_TITLE, f"Fehler: {e.__class__.__name__}: {e}")
+            ToastNotification(
+                title=APP_TITLE,
+                message=f"Fehler: {e.__class__.__name__}: {e}",
+                bootstyle="danger",
+            ).show_toast()
             self.progress.set("Fehler.")
 
 def main():

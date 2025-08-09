@@ -1,5 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+import ttkbootstrap as tb
+from ttkbootstrap import ttk
+from ttkbootstrap.toast import ToastNotification
 from pathlib import Path
 import toml
 
@@ -7,11 +9,11 @@ from app.config import validate_config
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.toml"
 
-class ConfigEditor(tk.Tk):
+class ConfigEditor(tb.Window):
     def __init__(self) -> None:
         super().__init__()
         self.title("Konfiguration")
-        self.geometry("120x120")
+        self.minsize(120, 120)
 
         # Gear icon button
         gear_button = ttk.Button(self, text="\u2699\ufe0f", command=self.open_editor, width=3)
@@ -23,16 +25,17 @@ class ConfigEditor(tk.Tk):
             try:
                 validate_config(cfg)
             except ValueError as exc:
-                messagebox.showwarning("Warnung", f"Ungültige Konfiguration: {exc}")
+                ToastNotification(title="Warnung", message=f"Ungültige Konfiguration: {exc}", bootstyle="warning").show_toast()
                 cfg = {}
         except (FileNotFoundError, toml.TomlDecodeError):
             cfg = {}
-            messagebox.showwarning(
-                "Warnung",
-                "Konfiguration konnte nicht geladen werden. Es wird eine leere Konfiguration verwendet.",
-            )
+            ToastNotification(
+                title="Warnung",
+                message="Konfiguration konnte nicht geladen werden. Es wird eine leere Konfiguration verwendet.",
+                bootstyle="warning",
+            ).show_toast()
 
-        top = tk.Toplevel(self)
+        top = tb.Toplevel(self)
         top.title("Einstellungen")
 
         # Chunking target_tokens
@@ -67,7 +70,7 @@ class ConfigEditor(tk.Tk):
 
             with CONFIG_PATH.open("w", encoding="utf-8") as f:
                 toml.dump(cfg, f)
-            messagebox.showinfo("Gespeichert", "Konfiguration gespeichert")
+            ToastNotification(title="Gespeichert", message="Konfiguration gespeichert", bootstyle="success").show_toast()
             top.destroy()
 
         save_button = ttk.Button(top, text="Speichern", command=save)

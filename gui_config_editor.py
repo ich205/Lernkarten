@@ -1,5 +1,7 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+import ttkbootstrap as tb
+from ttkbootstrap import ttk
+from ttkbootstrap.toast import ToastNotification
 from pathlib import Path
 import toml
 
@@ -14,11 +16,11 @@ def load_config() -> dict:
     except (FileNotFoundError, toml.TomlDecodeError):
         return {}
 
-class ConfigEditor(tk.Tk):
+class ConfigEditor(tb.Window):
     def __init__(self) -> None:
         super().__init__()
         self.title("Konfiguration")
-        self.geometry("120x120")
+        self.minsize(120, 120)
 
         # Gear icon button without external image
         gear_button = ttk.Button(self, text="\u2699\ufe0f", command=self.open_editor, width=3)
@@ -27,12 +29,13 @@ class ConfigEditor(tk.Tk):
     def open_editor(self) -> None:
         cfg = load_config()
         if not cfg:
-            messagebox.showwarning(
-                "Hinweis",
-                "config.toml nicht gefunden oder ungültig. Standardwerte werden verwendet.",
-            )
+            ToastNotification(
+                title="Hinweis",
+                message="config.toml nicht gefunden oder ungültig. Standardwerte werden verwendet.",
+                bootstyle="warning",
+            ).show_toast()
 
-        top = tk.Toplevel(self)
+        top = tb.Toplevel(self)
         top.title("Einstellungen")
 
         # Chunking target_tokens
@@ -67,7 +70,7 @@ class ConfigEditor(tk.Tk):
 
             with CONFIG_PATH.open("w", encoding="utf-8") as f:
                 toml.dump(cfg, f)
-            messagebox.showinfo("Gespeichert", "Konfiguration gespeichert")
+            ToastNotification(title="Gespeichert", message="Konfiguration gespeichert", bootstyle="success").show_toast()
             top.destroy()
 
         save_button = ttk.Button(top, text="Speichern", command=save)
