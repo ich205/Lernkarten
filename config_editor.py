@@ -3,6 +3,8 @@ from tkinter import ttk, messagebox
 from pathlib import Path
 import toml
 
+from app.config import validate_config
+
 CONFIG_PATH = Path(__file__).resolve().parent / "config.toml"
 
 class ConfigEditor(tk.Tk):
@@ -18,6 +20,11 @@ class ConfigEditor(tk.Tk):
     def open_editor(self) -> None:
         try:
             cfg = toml.load(CONFIG_PATH)
+            try:
+                validate_config(cfg)
+            except ValueError as exc:
+                messagebox.showwarning("Warnung", f"Ungültige Konfiguration: {exc}")
+                cfg = {}
         except (FileNotFoundError, toml.TomlDecodeError):
             cfg = {}
             messagebox.showwarning(
