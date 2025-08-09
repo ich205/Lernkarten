@@ -1,6 +1,19 @@
+"""Alternative Export-Routinen für Lernkarten.
+
+Im Gegensatz zu `excel_export.to_excel` erzeugt `export_to_excel` zusätzlich
+eine CSV-Datei (für z.B. Anki) sowie eine kleine JSON-Metadatei. Wird aktuell
+nicht direkt in der Pipeline verwendet, steht jedoch als Beispiel zur Verfügung.
+"""
+
 import os, pandas as pd, csv, datetime, pathlib, json
 
-def export_to_excel(rows, out_dir, base_name="export"):
+def export_to_excel(rows, out_dir, base_name: str = "export"):
+    """Schreibt ``rows`` in verschiedene Formate innerhalb von ``out_dir``.
+
+    Neben einer Excel-Datei wird auch eine CSV- und JSON-Datei erzeugt, die
+    Metadaten (Anzahl der Karten) enthält.
+    """
+
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     xlsx_path = os.path.join(out_dir, f"{base_name}_{ts}.xlsx")
     df = pd.DataFrame(rows, columns=["Original", "Frage", "Antwort", "Labels", "Quelle"])

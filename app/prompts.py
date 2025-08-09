@@ -1,3 +1,10 @@
+"""Konstanten mit System- und Nutzerprompts für OpenAI-Aufrufe.
+
+Andere Module (z. B. `labeling` oder `openai_client`) importieren diese Strings,
+um konsistente Prompts zu verwenden. Anpassungen hier wirken sich sofort auf
+alle Aufrufe aus.
+"""
+
 LABEL_SYSTEM = """Sie sind ein präziser akademischer Textklassifizierer.
 Geben Sie ausschließlich JSON zurück:
 {

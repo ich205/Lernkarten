@@ -1,4 +1,11 @@
-# app/openai_client.py
+"""Höhere Abstraktion der OpenAI-API.
+
+`OpenAIClient` kapselt die eigentlichen API-Aufrufe und kümmert sich um
+Initialisierung, Fehlerbehandlung und JSON-Modus. Die Klassen und Methoden
+werden von `pipeline.LernkartenPipeline` genutzt und greifen auf Werte aus
+``config.toml`` zurück (`DEFAULT_*`).
+"""
+
 from __future__ import annotations
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass

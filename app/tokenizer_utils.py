@@ -1,4 +1,10 @@
-# app/tokenizer_utils.py
+"""Tokenisierungs-Helfer.
+
+Stellt eine einfache Heuristik sowie eine optionale `tiktoken`-Integration zur
+Verfügung. Wird von `pipeline` und anderen Modulen genutzt, um die Größe von
+Textabschnitten abzuschätzen.
+"""
+
 from __future__ import annotations
 from typing import Iterable, Optional
 

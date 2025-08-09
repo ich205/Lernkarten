@@ -1,4 +1,10 @@
-# app/main.py
+"""Standalone-Startskript für die alternative Tkinter-Oberfläche.
+
+Während `gui.py` eine vereinfachte Oberfläche bietet, stellt dieses Modul eine
+ausführlichere Variante bereit. Es demonstriert, wie `LernkartenPipeline` direkt
+aus einem Skript heraus verwendet werden kann.
+"""
+
 from __future__ import annotations
 import os, sys, threading, traceback
 from tkinter import Tk, ttk, filedialog, StringVar, IntVar, BooleanVar, Text, END, N, S, E, W

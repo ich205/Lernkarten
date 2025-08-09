@@ -1,3 +1,11 @@
+"""Hilfsfunktionen für die Segment-Klassifikation.
+
+Das Modul verwendet die in `prompts.py` definierten System/User-Prompts und
+ruft `models.call_json_chat` auf, um für einen Textausschnitt Labels wie
+``definition`` oder ``fact`` zu bestimmen. Dies ist eine niedrigere Ebene der
+Pipeline-Klassifikation.
+"""
+
 from .prompts import LABEL_SYSTEM, LABEL_USER
 from .models import call_json_chat
 

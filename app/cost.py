@@ -1,3 +1,11 @@
+"""Kostenabschätzung auf Basis der Konfiguration.
+
+Dieses Modul wird nicht direkt von der Pipeline genutzt, dient jedoch als
+Beispiel, wie sich die Modelleinstellungen und Chunking-Parameter auf die
+erwarteten API-Kosten auswirken. Es liest die Preise aus ``config.toml`` und
+greift für Token-Zählungen auf `app.models` sowie `app.chunking` zurück.
+"""
+
 from .models import count_tokens_rough
 from .config import load_config
 from .chunking import split_into_chunks

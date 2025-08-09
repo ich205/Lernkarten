@@ -1,3 +1,11 @@
+"""Niedriglevel-Utilities für direkte OpenAI-Aufrufe.
+
+Dieses Modul stellt einfache Wrapper für Chat-Completions bereit und bietet
+einen groben Token-Zähler. Es wird von anderen Modulen (z. B. `openai_client`
+oder `labeling`) genutzt, wenn ein direkter API-Zugriff ohne zusätzliche
+Pipeline-Abstraktion nötig ist.
+"""
+
 import os, time, hashlib, json, math
 from typing import Dict, Any
 

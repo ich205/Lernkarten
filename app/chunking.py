@@ -1,3 +1,14 @@
+"""Utility-Funktionen zur Textsegmentierung.
+
+`split_into_chunks` zerlegt längere Texte in überlappende Abschnitte, die als
+"Chunks" an die OpenAI-API gesendet werden. Die Standardwerte orientieren sich
+an den Einstellungen in `config.toml` (`[chunking]`). Änderungen dort wirken
+sich direkt auf die Parameter `target_tokens`, `overlap_tokens` und
+`max_chars_per_chunk` aus.
+
+Dieses Modul wird hauptsächlich von `pipeline.load_and_segment` verwendet.
+"""
+
 from .models import count_tokens_rough
 import re, math
 
