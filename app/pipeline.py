@@ -9,6 +9,7 @@ Standardwerte stammen aus ``config.toml`` und werden beim Erstellen der
 from __future__ import annotations
 from typing import List, Dict, Any, Tuple, Callable, Optional
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .tokenizer_utils import Tokenizer
 from .config import PRICES, ESTIMATE
 from .openai_client import OpenAIClient, OpenAISettings
@@ -76,48 +77,108 @@ class LernkartenPipeline:
         stop_cb: Optional[Callable[[], bool]] = None,
         pause_event: Any | None = None,
         card_cb: Optional[Callable[[str, str, str], None]] = None,
+        max_workers: int = 3,
     ) -> List[Dict[str, Any]]:
-        """Generiert Lernkarten dynamisch je nach Segmentlänge."""
+        """Generiert Lernkarten dynamisch je nach Segmentlänge.
+
+        Bei kleinen Inputs wird sequenziell gearbeitet; ab vier Segmenten wird
+        standardmäßig parallelisiert (max. ``max_workers`` Threads)."""
         rows: List[Dict[str, Any]] = []
         card_count = 0
         total = len(segments)
-        for i, s in enumerate(segments, 1):
-            if not s.keep:
+
+        # --- Sequenziell: kleine Inputs oder Parallelisierung deaktiviert ---
+        if total < 4 or max_workers <= 1:
+            for i, s in enumerate(segments, 1):
+                if not s.keep:
+                    if progress_cb:
+                        progress_cb(i, total, card_count)
+                    continue
+                if stop_cb and stop_cb():
+                    raise RuntimeError("Abgebrochen")
+                if pause_event:
+                    pause_event.wait()
+                tokens = self.tok.count(s.text)
+                n_questions = max(1, min(max_questions_per_chunk, tokens // 100))
+                items = self.client.gen_qa_for_chunk(
+                    s.text[:8000], n_questions, language=language
+                )
+                if not items:
+                    if progress_cb:
+                        progress_cb(i, total, card_count)
+                    continue
+                fragen: List[str] = []
+                antworten: List[str] = []
+                for x in items:
+                    fragen.append(x["frage"])
+                    antworten.append(x["antwort"])
+                    if card_cb:
+                        card_cb(s.text, x["frage"], x["antwort"])
+                card_count += len(items)
+                rows.append(
+                    {
+                        "original": s.text,
+                        "fragen": fragen,
+                        "antworten": antworten,
+                        "labels": [s.label] if s.label else [],
+                        "hinweise": "",
+                    }
+                )
                 if progress_cb:
                     progress_cb(i, total, card_count)
-                continue
-            if stop_cb and stop_cb():
-                raise RuntimeError("Abgebrochen")
-            if pause_event:
-                pause_event.wait()
-            tokens = self.tok.count(s.text)
-            n_questions = max(1, min(max_questions_per_chunk, tokens // 100))
-            items = self.client.gen_qa_for_chunk(
-                s.text[:8000], n_questions, language=language
-            )
-            if not items:
-                if progress_cb:
-                    progress_cb(i, total, card_count)
-                continue
-            fragen = []
-            antworten = []
-            for x in items:
-                fragen.append(x["frage"])
-                antworten.append(x["antwort"])
-                if card_cb:
-                    card_cb(s.text, x["frage"], x["antwort"])
-            card_count += len(items)
-            rows.append(
-                {
+            return rows
+
+        # --- Parallel: groessere Inputs ---
+        indexed_rows: Dict[int, Dict[str, Any]] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures: Dict[Any, Tuple[int, Segment]] = {}
+            for i, s in enumerate(segments, 1):
+                if stop_cb and stop_cb():
+                    raise RuntimeError("Abgebrochen")
+                if not s.keep:
+                    if progress_cb:
+                        progress_cb(i, total, card_count)
+                    continue
+                if pause_event:
+                    pause_event.wait()
+                tokens = self.tok.count(s.text)
+                n_questions = max(1, min(max_questions_per_chunk, tokens // 100))
+                fut = ex.submit(
+                    self.client.gen_qa_for_chunk, s.text[:8000], n_questions, language
+                )
+                futures[fut] = (i, s)
+
+            for fut in as_completed(futures):
+                i, s = futures[fut]
+                try:
+                    items = fut.result()
+                except Exception:
+                    items = None
+                if not items:
+                    if progress_cb:
+                        progress_cb(i, total, card_count)
+                    continue
+                fragen: List[str] = []
+                antworten: List[str] = []
+                for x in items:
+                    fragen.append(x["frage"])
+                    antworten.append(x["antwort"])
+                    if card_cb:
+                        card_cb(s.text, x["frage"], x["antwort"])
+                card_count += len(items)
+                indexed_rows[i] = {
                     "original": s.text,
                     "fragen": fragen,
                     "antworten": antworten,
                     "labels": [s.label] if s.label else [],
                     "hinweise": "",
                 }
-            )
-            if progress_cb:
-                progress_cb(i, total, card_count)
+                if progress_cb:
+                    progress_cb(i, total, card_count)
+
+        # sortieren nach Ursprungsreihenfolge
+        for i in sorted(indexed_rows):
+            rows.append(indexed_rows[i])
         return rows
 
     # === Kosten-Schaetzung ===
