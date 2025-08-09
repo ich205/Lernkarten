@@ -187,15 +187,19 @@ class App:
         snippet = original.strip()
         if len(snippet) > 200:
             snippet = snippet[:200] + "…"
-        for widget, content in (
-            (self.preview_orig, snippet),
-            (self.preview_frage, frage),
-            (self.preview_antwort, antwort),
-        ):
-            widget.configure(state="normal")
-            widget.delete("1.0", END)
-            widget.insert(END, content)
-            widget.configure(state="disabled")
+
+        def do_update():
+            for widget, content in (
+                (self.preview_orig, snippet),
+                (self.preview_frage, frage),
+                (self.preview_antwort, antwort),
+            ):
+                widget.configure(state="normal")
+                widget.delete("1.0", END)
+                widget.insert(END, content)
+                widget.configure(state="disabled")
+
+        self.root.after(0, do_update)
 
     def segment_and_estimate(self):
         path = self.file_path.get().strip()
