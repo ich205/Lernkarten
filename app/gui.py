@@ -10,12 +10,12 @@ Ergebnisse zu exportieren.
 import os
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox
-from tkinter.scrolledtext import ScrolledText
+from tkinter import filedialog
 import webbrowser
 import ttkbootstrap as tb
 from ttkbootstrap.tooltip import ToolTip
 from ttkbootstrap.toast import ToastNotification
+from ttkbootstrap.scrolled import ScrolledText
 
 from openai import OpenAIError
 
@@ -150,7 +150,7 @@ def run_gui():
     right.add(tab_log, text="Log")
     right.add(tab_export, text="Export")
 
-    log_widget = ScrolledText(tab_log, height=12, wrap="word")
+    log_widget = ScrolledText(tab_log, wrap="word")
     log_widget.pack(fill="both", expand=True)
 
     # Status bar
@@ -185,11 +185,11 @@ def run_gui():
     def estimate() -> None:
         p = file_path_var.get().strip()
         if not p:
-            messagebox.showerror("Fehler", "Bitte zunächst eine Datei wählen.")
+            ToastNotification(title="Fehler", message="Bitte zunächst eine Datei wählen.", bootstyle="danger").show_toast()
             return
         raw = try_extract_text(p)
         if not raw.strip():
-            messagebox.showerror("Fehler", "Konnte keinen Text extrahieren.")
+            ToastNotification(title="Fehler", message="Konnte keinen Text extrahieren.", bootstyle="danger").show_toast()
             return
         model = model_var.get()
         label_model = label_model_var.get()
@@ -201,13 +201,13 @@ def run_gui():
     def start() -> None:
         p = file_path_var.get().strip()
         if not p:
-            messagebox.showerror("Fehler", "Bitte Datei wählen.")
+            ToastNotification(title="Fehler", message="Bitte Datei wählen.", bootstyle="danger").show_toast()
             return
         api = api_key_var.get().strip()
         if not api:
             api, _ = load_api_key(cfg)
         if not api:
-            messagebox.showerror("Fehler", "Bitte API‑Key eingeben (nur für diese Sitzung).")
+            ToastNotification(title="Fehler", message="Bitte API‑Key eingeben (nur für diese Sitzung).", bootstyle="danger").show_toast()
             return
         outd = out_dir_var.get().strip() or "."
         os.makedirs(outd, exist_ok=True)
@@ -262,10 +262,11 @@ def run_gui():
     root.bind("<Control-e>", lambda e: open_export())
 
     if source in {"config", "file"}:
-        messagebox.showwarning(
-            APP_TITLE,
-            "API-Key wurde aus einer Datei geladen. Klartextspeicherung ist riskant.",
-        )
+        ToastNotification(
+            title=APP_TITLE,
+            message="API-Key wurde aus einer Datei geladen. Klartextspeicherung ist riskant.",
+            bootstyle="warning",
+        ).show_toast()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()
