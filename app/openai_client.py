@@ -11,8 +11,50 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import time
 import json
+import logging
 
 from .config import DEFAULT_CLASSIFY_MODEL, DEFAULT_QA_MODEL, DEFAULT_LANGUAGE
+
+
+def retry_request(func, *args, **kwargs):
+    """Führt *func* mit Wiederholungen und Exponential-Backoff aus.
+
+    Parameter:
+        func: Aufzurufende Funktion
+        *args: Positionsargumente für func
+        **kwargs: Keyword-Argumente für func. Zusätzliche optionale
+            Kontrollparameter:
+            - n: maximale Anzahl Versuche (Standard: 3)
+            - delay: Anfangspause zwischen den Versuchen in Sekunden
+              (Standard: 1)
+            - backoff: Faktor, mit dem die Pause nach jedem Fehlschlag
+              multipliziert wird (Standard: 2)
+    """
+
+    max_attempts = kwargs.pop("n", 3)
+    delay = kwargs.pop("delay", 1)
+    backoff = kwargs.pop("backoff", 2)
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            if attempt == max_attempts:
+                logging.warning(
+                    "API request failed after %s attempts: %s", attempt, exc
+                )
+                raise RuntimeError(
+                    f"Request failed after {max_attempts} attempts"
+                ) from exc
+            logging.warning(
+                "API request failed (attempt %s/%s): %s – retrying in %ss",
+                attempt,
+                max_attempts,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
+            delay *= backoff
 
 @dataclass
 class OpenAISettings:
@@ -54,14 +96,15 @@ class OpenAIClient:
             "oder aehnliches handelt, setze keep=false. Sonst keep=true.\n\n"
             f"---\n{text}\n---"
         )
-        resp = client.chat.completions.create(
+        resp = retry_request(
+            client.chat.completions.create,
             model=self.settings.classify_model,
             temperature=0.0,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            response_format={"type":"json_object"},
+            response_format={"type": "json_object"},
         )
         try:
             data = json.loads(resp.choices[0].message.content)
@@ -87,14 +130,15 @@ class OpenAIClient:
             "Antworten moeglichst kurz, klar und eindeutig.\n\n"
             f"=== TEXT BEGINN ===\n{text}\n=== TEXT ENDE ==="
         )
-        resp = client.chat.completions.create(
+        resp = retry_request(
+            client.chat.completions.create,
             model=self.settings.qa_model,
             temperature=self.settings.temperature,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            response_format={"type":"json_object"},
+            response_format={"type": "json_object"},
         )
         try:
             content = resp.choices[0].message.content
