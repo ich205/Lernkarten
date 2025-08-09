@@ -170,3 +170,7 @@ class LernkartenPipeline:
 
     def export_excel(self, rows: List[Dict[str, Any]], out_path: str) -> None:
         to_excel(rows, out_path)
+
+
+# Übergangs-Alias für alte Imports, bitte mittelfristig entfernen:
+Pipeline = LernkartenPipeline
