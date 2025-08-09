@@ -11,8 +11,6 @@ import re
 from typing import List, Tuple, Iterable, Optional
 import io
 
-from pypdf.errors import PdfReadError
-
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -31,7 +29,16 @@ def extract_text_from_pdf(path: str) -> str:
     except (ImportError, OSError) as err:
         # Fallback: pypdf
         logger.warning("pdfplumber nicht verfügbar oder Fehler beim Lesen: %s", err)
-        from pypdf import PdfReader
+        try:
+            from pypdf import PdfReader
+            from pypdf.errors import PdfReadError
+        except ImportError as err2:
+            msg = (
+                "Weder pdfplumber noch pypdf sind verfügbar. "
+                "Bitte installieren Sie eines der beiden Pakete, um PDF-Dateien lesen zu können."
+            )
+            logger.error(msg)
+            raise ImportError(msg) from err2
         full = []
         reader = PdfReader(path)
         for page in reader.pages:
