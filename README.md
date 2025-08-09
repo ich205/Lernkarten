@@ -30,6 +30,21 @@ und CSV (z. B. für Anki).
   - macOS/Linux: `bash run.sh`
 4. In der GUI: **Skript wählen**, **API‑Key eingeben**, **Gründlichkeit** & **Budget** setzen, **Schätzen** → **Start**.
 
+### API‑Schlüssel bereitstellen
+
+Der OpenAI‑Key wird standardmäßig nur über die GUI abgefragt und **nicht auf
+der Festplatte gespeichert**. Beim Beenden der Anwendung wird der Wert
+verworfen.
+
+Alternativen:
+
+- Umgebungsvariable `OPENAI_API_KEY`
+- `config.toml` → Abschnitt `[auth]` mit `api_key` oder `api_key_file`
+
+> **Warnung:** Das Ablegen des Schlüssels in Textdateien oder `config.toml`
+> ist unsicher. Die Anwendung gibt beim Start eine Warnung aus, wenn solche
+> Quellen genutzt werden.
+
 ## Ordnerstruktur
 
 - `app/` – Quellcode der Anwendung

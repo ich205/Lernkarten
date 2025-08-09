@@ -5,6 +5,11 @@ Module weitergereicht. Jede Option ist daher mit einem Hinweis versehen, wo sie
 im Code verwendet wird und welche Alternativen möglich sind.
 """
 
+[auth]
+# Optionale API-Key-Quelle. Klartextspeicherung ist riskant!
+# api_key = "sk-..."
+# api_key_file = "pfad/zur/api_key.txt"
+
 [models]
 # IDs der zu verwendenden OpenAI‑Modelle. Sie werden in `app.openai_client`
 # gelesen und bestimmen, welche Endpunkte für Klassifikation und Fragenantworten
