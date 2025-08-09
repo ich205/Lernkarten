@@ -10,7 +10,8 @@ Ergebnisse zu exportieren.
 import os
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from ttkbootstrap import ttk
+from tkinter import filedialog, messagebox
 
 from openai import OpenAIError
 
@@ -20,6 +21,7 @@ from .cost import estimate_cost_for_text
 from .pdf_utils import try_extract_text
 from .models import count_tokens_rough
 from .logging_utils import get_logger
+from .theme import make_root, attach_theme_toggle, DEFAULT_THEME, ALT_THEME
 
 logger = get_logger(__name__)
 
@@ -31,18 +33,11 @@ def run_gui():
 
     api_key_initial, source = load_api_key(cfg)
 
-    root = tk.Tk()
-    root.title(APP_TITLE)
-    root.geometry("1000x680")
-
-    # Theming
-    style = ttk.Style()
-    try:
-        if cfg["ui"].get("theme", "auto") == "dark":
-            root.tk.call("tk", "scaling", 1.1)
-        style.theme_use("clam")
-    except tk.TclError:
-        pass
+    theme_pref = cfg["ui"].get("theme", "auto")
+    initial_theme = ALT_THEME if theme_pref == "light" else DEFAULT_THEME
+    root = make_root(APP_TITLE, theme=initial_theme)
+    style = root.style
+    attach_theme_toggle(root, style)
 
     # State variables
     api_key_var = tk.StringVar(value=api_key_initial)
