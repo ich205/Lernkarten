@@ -94,6 +94,10 @@ class LernkartenPipeline:
             items = self.client.gen_qa_for_chunk(
                 s.text[:8000], n_questions, language=language
             )
+            if not items:
+                if progress_cb:
+                    progress_cb(i, total, card_count)
+                continue
             card_count += len(items)
             rows.append(
                 {
