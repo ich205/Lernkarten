@@ -6,14 +6,16 @@ liefert.
 """
 
 from __future__ import annotations
-from typing import List, Dict, Any
+from typing import List
 from pathlib import Path
 try:
     import pandas as pd  # optional
 except Exception:  # ImportError + env specifics
     pd = None
 
-def to_excel(rows: List[Dict[str, Any]], out_path: str) -> None:
+from .pipeline_models import CardRow
+
+def to_excel(rows: List[CardRow], out_path: str) -> None:
     """Schreibt eine Liste von Karten in ``out_path``."""
 
     path = Path(out_path)
@@ -26,14 +28,14 @@ def to_excel(rows: List[Dict[str, Any]], out_path: str) -> None:
 
     data = [
         {
-            "Original": r.get("original", ""),
+            "Original": r.original,
             "Frage": q,
             "Antwort": a,
-            "Labels": ", ".join(r.get("labels", [])),
-            "Quelle": r.get("source", ""),
+            "Labels": ", ".join(r.labels),
+            "Quelle": r.source,
         }
         for r in rows
-        for q, a in zip(r.get("fragen", []), r.get("antworten", []))
+        for q, a in zip(r.fragen, r.antworten)
     ]
 
     if pd is not None:
