@@ -48,6 +48,39 @@ ESTIMATE = {
 }
 
 
+REQUIRED_KEYS = ["models", "costs", "chunking", "ui"]
+_REQUIRED_MODEL_KEYS = ["qa_model", "label_model"]
+
+
+def validate_config(cfg: Dict[str, Any]) -> None:
+    """Validate minimal schema of ``config.toml``.
+
+    Raises ``ValueError`` with a descriptive message if required sections or
+    options are missing. Only a subset of fields is checked to provide early
+    feedback when editing the configuration.
+    """
+
+    for section in REQUIRED_KEYS:
+        if section not in cfg:
+            raise ValueError(f"config.toml: Abschnitt [{section}] fehlt")
+
+    models = cfg["models"]
+    for key in _REQUIRED_MODEL_KEYS:
+        if key not in models:
+            raise ValueError(f"config.toml: Option models.{key} fehlt")
+
+    costs = cfg["costs"]
+    for model in {models["qa_model"], models["label_model"]}:
+        for suffix in (
+            "input_usd_per_mtok",
+            "cached_input_usd_per_mtok",
+            "output_usd_per_mtok",
+        ):
+            cost_key = f"{model}_{suffix}"
+            if cost_key not in costs:
+                raise ValueError(f"config.toml: Kostenangabe costs.{cost_key} fehlt")
+
+
 _CFG_CACHE: Dict[str, Any] | None = None
 
 from .logging_utils import get_logger
