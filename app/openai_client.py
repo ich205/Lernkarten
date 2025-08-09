@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import time
 import json
+import random
 
 from openai import OpenAIError
 
@@ -30,7 +31,9 @@ def retry_request(func, *args, **kwargs):
             Kontrollparameter:
             - n: maximale Anzahl Versuche (Standard: 3)
             - delay: Anfangspause zwischen den Versuchen in Sekunden
-              (Standard: 1)
+              (Standard: 1). Zwischen den Versuchen wird zusätzlich ein
+              zufälliger Jitter von 0 bis 1 Sekunde addiert, um
+              gleichzeitige Wiederholungen zu entzerren.
             - backoff: Faktor, mit dem die Pause nach jedem Fehlschlag
               multipliziert wird (Standard: 2)
     """
@@ -57,7 +60,7 @@ def retry_request(func, *args, **kwargs):
                 exc,
                 delay,
             )
-            time.sleep(delay)
+            time.sleep(delay + random.uniform(0, 1))
             delay *= backoff
 
 @dataclass
