@@ -1,5 +1,12 @@
 # app/config.py
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict
+
+try:  # Python 3.11+
+    import tomllib  # type: ignore[attr-defined]
+except Exception:  # pragma: no cover - fallback for Python <3.11
+    import tomli as tomllib  # type: ignore
 
 # Modellnamen sind konfigurierbar – passe sie ggf. an deinen Account an.
 GPT5 = "gpt-5"            # Hochwertiges Modell
@@ -32,3 +39,29 @@ ESTIMATE = {
     "qa_prompt_overhead": 180,         # Tokens pro Chunk + Anweisung
     "qa_per_item_output": 220,         # Frage+Antwort gesamt
 }
+
+
+_CFG_CACHE: Dict[str, Any] | None = None
+
+
+def load_config(path: str | None = None) -> Dict[str, Any]:
+    """Load configuration from ``config.toml``.
+
+    The result is cached so repeated calls are cheap. If ``path`` is not
+    provided, the function looks for ``config.toml`` in the project root
+    (one directory above this file). Missing files result in an empty
+    dictionary instead of an exception, allowing callers to provide
+    sensible defaults.
+    """
+
+    global _CFG_CACHE
+    if _CFG_CACHE is not None:
+        return _CFG_CACHE
+
+    cfg_path = Path(path) if path else Path(__file__).resolve().parent.parent / "config.toml"
+    try:
+        with cfg_path.open("rb") as f:
+            _CFG_CACHE = tomllib.load(f)
+    except FileNotFoundError:
+        _CFG_CACHE = {}
+    return _CFG_CACHE
