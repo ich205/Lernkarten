@@ -11,6 +11,13 @@ import re
 from typing import List, Tuple, Iterable, Optional
 import io
 
+from pypdf.errors import PdfReadError
+
+from .logging_utils import get_logger
+
+logger = get_logger(__name__)
+
+
 # Wir versuchen zuerst pdfplumber; faellt auf pypdf zurueck.
 def extract_text_from_pdf(path: str) -> str:
     try:
@@ -21,15 +28,17 @@ def extract_text_from_pdf(path: str) -> str:
                 txt = page.extract_text() or ""
                 full.append(txt)
         return "\n\n".join(full)
-    except Exception:
+    except (ImportError, OSError) as err:
         # Fallback: pypdf
+        logger.warning("pdfplumber nicht verfügbar oder Fehler beim Lesen: %s", err)
         from pypdf import PdfReader
         full = []
         reader = PdfReader(path)
         for page in reader.pages:
             try:
                 txt = page.extract_text() or ""
-            except Exception:
+            except (PdfReadError, KeyError) as err2:
+                logger.warning("Textseite konnte nicht extrahiert werden: %s", err2)
                 txt = ""
             full.append(txt)
         return "\n\n".join(full)

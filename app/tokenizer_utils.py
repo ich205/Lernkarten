@@ -8,6 +8,12 @@ Textabschnitten abzuschätzen.
 from __future__ import annotations
 from typing import Iterable, Optional
 
+import requests
+
+from .logging_utils import get_logger
+
+logger = get_logger(__name__)
+
 def approximate_token_count(text: str) -> int:
     """
     Fallback-Heuristik: durchschnittlich ~4 Zeichen pro Token (Deutsch liegt oft 3.7–4.5).
@@ -28,17 +34,24 @@ class Tokenizer:
             # o200k_base abwaerts-kompatibel; faellt auf cl100k_base zurueck
             try:
                 self._enc = tiktoken.get_encoding(encoding_name)
-            except Exception:
-                self._enc = tiktoken.get_encoding("cl100k_base")
-        except Exception:
+            except (KeyError, requests.exceptions.RequestException):
+                try:
+                    self._enc = tiktoken.get_encoding("cl100k_base")
+                except (KeyError, requests.exceptions.RequestException):
+                    self._enc = None
+        except ImportError:
             self._enc = None
+            logger.warning("tiktoken nicht installiert; heuristische Tokenisierung wird verwendet")
+        if self._enc is None:
+            logger.warning("tiktoken konnte keine Encoding laden; heuristische Tokenisierung wird verwendet")
 
     def count(self, text: str) -> int:
         if self._enc is None:
             return approximate_token_count(text)
         try:
             return len(self._enc.encode(text or ""))
-        except Exception:
+        except ValueError:
+            logger.warning("Fehler bei der Tokenisierung, falle auf Heuristik zurueck")
             return approximate_token_count(text)
 
     def count_all(self, texts: Iterable[str]) -> int:

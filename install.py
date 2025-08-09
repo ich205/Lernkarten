@@ -7,6 +7,10 @@ import zipfile
 import stat
 import re
 
+from app.logging_utils import get_logger
+
+logger = get_logger(__name__)
+
 PY_MIN = (3, 10)
 HERE = os.path.abspath(os.path.dirname(__file__))
 ZIP_NAME = "Lernkarten.zip"
@@ -15,8 +19,12 @@ EXTRACT_DIR = "Lernkarten"
 
 def ensure_python():
     if sys.version_info < PY_MIN:
-        print(
-            f"[FEHLER] Python >= {PY_MIN[0]}.{PY_MIN[1]} erforderlich, gefunden: {sys.version_info.major}.{sys.version_info.minor}"
+        logger.error(
+            "Python >= %s.%s erforderlich, gefunden: %s.%s",
+            PY_MIN[0],
+            PY_MIN[1],
+            sys.version_info.major,
+            sys.version_info.minor,
         )
         sys.exit(1)
 
@@ -26,9 +34,9 @@ def ensure_extracted():
     extract_path = os.path.join(HERE, EXTRACT_DIR)
     if os.path.exists(zip_path):
         if os.path.isdir(extract_path):
-            print("[INFO] Archiv bereits entpackt.")
+            logger.info("Archiv bereits entpackt.")
         else:
-            print("[INFO] Entpacke Archiv …")
+            logger.info("Entpacke Archiv …")
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(extract_path)
         return extract_path
@@ -51,7 +59,7 @@ def packages_installed(pip_cmd, requirements):
 def install_requirements(base_dir):
     venv_dir = os.path.join(base_dir, ".venv")
     if not os.path.exists(venv_dir):
-        print("[INFO] Erzeuge virtuelle Umgebung …")
+        logger.info("Erzeuge virtuelle Umgebung …")
         venv.EnvBuilder(with_pip=True).create(venv_dir)
 
     python = (
@@ -63,9 +71,9 @@ def install_requirements(base_dir):
 
     basics = ["pip", "setuptools", "wheel"]
     if packages_installed(pip_cmd, basics):
-        print("[INFO] Grundlegende Pakete bereits installiert.")
+        logger.info("Grundlegende Pakete bereits installiert.")
     else:
-        print("[INFO] Aktualisiere pip …")
+        logger.info("Aktualisiere pip …")
         subprocess.check_call(pip_cmd + ["install", "-U"] + basics)
 
     req_file = os.path.join(base_dir, "installer", "requirements.txt")
@@ -73,9 +81,9 @@ def install_requirements(base_dir):
         reqs = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
     if packages_installed(pip_cmd, reqs):
-        print("[INFO] Requirements bereits installiert.")
+        logger.info("Requirements bereits installiert.")
     else:
-        print("[INFO] Installiere Requirements …")
+        logger.info("Installiere Requirements …")
         subprocess.check_call(pip_cmd + ["install", "-r", req_file])
 
     return venv_dir
@@ -107,7 +115,7 @@ else:
             fh.write("@echo off\r\n")
             fh.write(f"cd {EXTRACT_DIR}\r\n")
             fh.write("call run.bat\r\n")
-        print("\n[OK] Installation fertig. Starten Sie das Programm mit start.bat")
+        logger.info("Installation fertig. Starten Sie das Programm mit start.bat")
     else:
         with open(os.path.join(HERE, "start.sh"), "w", encoding="utf-8") as fh:
             fh.write("#!/usr/bin/env bash\n")
@@ -119,7 +127,7 @@ else:
             | stat.S_IRGRP | stat.S_IXGRP
             | stat.S_IROTH | stat.S_IXOTH,
         )
-        print("\n[OK] Installation fertig. Starten Sie das Programm mit ./start.sh oder python start.py")
+        logger.info("Installation fertig. Starten Sie das Programm mit ./start.sh oder python start.py")
 
 
 def main():
@@ -128,12 +136,12 @@ def main():
     install_requirements(base)
     create_start_scripts(base)
     if base == HERE:
-        print("\n[OK] Installation fertig.")
-        print("Starten Sie die App mit:")
+        logger.info("Installation fertig.")
+        logger.info("Starten Sie die App mit:")
         if platform.system() == "Windows":
-            print("  run.bat")
+            logger.info("  run.bat")
         else:
-            print("  bash run.sh")
+            logger.info("  bash run.sh")
 
 
 if __name__ == "__main__":

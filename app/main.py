@@ -6,13 +6,39 @@ aus einem Skript heraus verwendet werden kann.
 """
 
 from __future__ import annotations
-import os, sys, threading, traceback
-from tkinter import Tk, ttk, filedialog, StringVar, IntVar, BooleanVar, Text, END, N, S, E, W
-from tkinter import messagebox
+import os, sys, threading
+from tkinter import (
+    Tk,
+    ttk,
+    filedialog,
+    StringVar,
+    IntVar,
+    BooleanVar,
+    Text,
+    END,
+    N,
+    S,
+    E,
+    W,
+    messagebox,
+    TclError,
+)
+from pypdf.errors import PdfReadError
+from openai import OpenAIError
 
-from .config import DEFAULT_CLASSIFY_MODEL, DEFAULT_QA_MODEL, GPT5, GPT5_MINI, GPT5_NANO, DEFAULT_LANGUAGE
+from .config import (
+    DEFAULT_CLASSIFY_MODEL,
+    DEFAULT_QA_MODEL,
+    GPT5,
+    GPT5_MINI,
+    GPT5_NANO,
+    DEFAULT_LANGUAGE,
+)
 from .pipeline import LernkartenPipeline
 from .openai_client import OpenAISettings
+from .logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 APP_TITLE = "Lernkarten-Generator (Installer-fix)"
 
@@ -20,8 +46,8 @@ def safe_tk():
     try:
         root = Tk()
         return root
-    except Exception as e:
-        print("Fehler beim Starten der GUI:", e, file=sys.stderr)
+    except TclError as e:
+        logger.exception("Fehler beim Starten der GUI")
         sys.exit(1)
 
 class App:
@@ -113,8 +139,8 @@ class App:
         try:
             self.questions_per_chunk.set(int(float(val)))
             self.update_cost_label()
-        except Exception:
-            pass
+        except (ValueError, TypeError):
+            logger.debug("Ungültiger Wert für Slider: %s", val)
 
     def pick_file(self):
         p = filedialog.askopenfilename(
@@ -148,14 +174,14 @@ class App:
             try:
                 reader = PdfReader(path)
                 self._total_pages = len(reader.pages)
-            except Exception:
+            except (PdfReadError, OSError):
                 self._total_pages = 0
             self.logln(f"Segmentiert: {len(segs)} Segmente.")
             self.progress.set(f"Segmentierung fertig: {len(segs)} Segmente.")
             self.update_cost_label()
-        except Exception as e:
-            traceback.print_exc()
-            messagebox.showerror(APP_TITLE, f"Fehler bei Segmentierung: {e}")
+        except (OSError, ValueError, PdfReadError) as e:
+            logger.exception("Fehler bei Segmentierung")
+            messagebox.showerror(APP_TITLE, f"Fehler bei Segmentierung: {e.__class__.__name__}: {e}")
             self.progress.set("Fehler.")
             return
 
@@ -192,8 +218,9 @@ class App:
                  f"{est['qa']['input_tokens']:,} in / {est['qa']['output_tokens']:,} out → ${est['qa']['usd']:.4f};  "
                  f"GESAMT ≈ ${est['sum_usd']:.4f} (Schätzung)")
             self.cost_label.set(s)
-        except Exception as e:
-            self.cost_label.set(f"Fehler bei Schätzung: {e}")
+        except (OSError, ValueError) as e:
+            logger.warning("Fehler bei Kostenschätzung: %s", e)
+            self.cost_label.set(f"Fehler bei Schätzung: {e.__class__.__name__}: {e}")
 
     def start_pipeline(self):
         if not self._segments:
@@ -282,9 +309,9 @@ class App:
             self.progress.set(f"Fertig. Export: {out_path}")
             self.logln(f"Exportiert nach: {out_path}")
             messagebox.showinfo(APP_TITLE, f"Fertig! Datei gespeichert:\n{out_path}")
-        except Exception as e:
-            traceback.print_exc()
-            messagebox.showerror(APP_TITLE, f"Fehler: {e}")
+        except (OSError, ValueError, RuntimeError, OpenAIError) as e:
+            logger.exception("Fehler in der Pipeline")
+            messagebox.showerror(APP_TITLE, f"Fehler: {e.__class__.__name__}: {e}")
             self.progress.set("Fehler.")
 
 def main():
@@ -293,7 +320,7 @@ def main():
     # Nutze system theme
     try:
         style.theme_use(style.theme_use())
-    except Exception:
+    except TclError:
         pass
     App(root)
     root.mainloop()
