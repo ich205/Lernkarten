@@ -2,6 +2,10 @@
 # Voraussetzungen: .\install.py ausgeführt
 $ErrorActionPreference = "Stop"
 
+# Wechsel in das Projektwurzelverzeichnis
+$ROOT = Split-Path -Parent $PSScriptRoot
+Set-Location $ROOT
+
 if (!(Test-Path ".venv\Scripts\activate.ps1")) {
   Write-Error "Venv nicht gefunden. Bitte zuerst: python install.py"
 }

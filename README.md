@@ -26,9 +26,17 @@ und CSV (z. B. für Anki).
    python install.py
    ```
 3. Starten:
-   - Windows: `run.bat`
-   - macOS/Linux: `bash run.sh`
+ - Windows: `run.bat`
+  - macOS/Linux: `bash run.sh`
 4. In der GUI: **Skript wählen**, **API‑Key eingeben**, **Gründlichkeit** & **Budget** setzen, **Schätzen** → **Start**.
+
+## Ordnerstruktur
+
+- `app/` – Quellcode der Anwendung
+- `assets/` – statische Ressourcen
+- `docs/` – Dokumentation und Lizenz
+- `installer/` – Installationsskripte und `requirements.txt`
+- `config_editor.py`, `gui_config_editor.py`, `run.sh`, `run.bat`, `install.py`, `config.toml`, `.env.example` – direkt startbare bzw. anpassbare Dateien
 
 ## Installation aus ZIP
 1. `Lernkarten.zip` und `install.py` in denselben Ordner legen.

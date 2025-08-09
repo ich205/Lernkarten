@@ -68,7 +68,7 @@ def install_requirements(base_dir):
         print("[INFO] Aktualisiere pip …")
         subprocess.check_call(pip_cmd + ["install", "-U"] + basics)
 
-    req_file = os.path.join(base_dir, "requirements.txt")
+    req_file = os.path.join(base_dir, "installer", "requirements.txt")
     with open(req_file, encoding="utf-8") as fh:
         reqs = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
