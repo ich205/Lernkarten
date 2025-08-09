@@ -7,6 +7,7 @@ liefert.
 
 from __future__ import annotations
 from typing import List, Dict, Any
+from pathlib import Path
 
 def to_excel(rows: List[Dict[str, Any]], out_path: str) -> None:
     """Schreibt eine Liste von Karten in ``out_path``.
@@ -32,4 +33,9 @@ def to_excel(rows: List[Dict[str, Any]], out_path: str) -> None:
             "Hinweise": r.get("hinweise",""),
         } for r in rows
     ])
-    df.to_excel(out_path, index=False)
+    path = Path(out_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        df.to_excel(path, index=False)
+    except OSError as exc:
+        raise RuntimeError(f"Could not write Excel file {path}: {exc}") from exc

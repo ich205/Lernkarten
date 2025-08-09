@@ -13,7 +13,10 @@ import time
 import json
 import random
 
-from openai import OpenAIError
+try:
+    from openai import OpenAIError
+except ImportError:  # pragma: no cover - optional dependency
+    OpenAIError = Exception  # type: ignore
 
 from .config import DEFAULT_CLASSIFY_MODEL, DEFAULT_QA_MODEL, DEFAULT_LANGUAGE
 from .logging_utils import get_logger
@@ -115,9 +118,11 @@ class OpenAIClient:
             ],
             response_format={"type": "json_object"},
         )
+        content = resp.choices[0].message.content
         try:
-            data = json.loads(resp.choices[0].message.content)
+            data = json.loads(content)
         except json.JSONDecodeError:
+            logger.warning("Failed to parse classification response: %r", content)
             data = {"label": "Fakt", "keep": True, "reason": "fallback"}
         return data
 
@@ -149,8 +154,8 @@ class OpenAIClient:
             ],
             response_format={"type": "json_object"},
         )
+        content = resp.choices[0].message.content
         try:
-            content = resp.choices[0].message.content
             data = json.loads(content)
             if isinstance(data, dict) and "items" in data:
                 items = data["items"]
@@ -164,4 +169,5 @@ class OpenAIClient:
                     out.append({"frage": q, "antwort": a})
             return out
         except (json.JSONDecodeError, KeyError, TypeError):
+            logger.warning("Failed to parse QA response: %r", content)
             return []

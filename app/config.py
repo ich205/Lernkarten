@@ -75,6 +75,9 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
             _CFG_CACHE = tomllib.load(f)
     except FileNotFoundError:
         _CFG_CACHE = {}
+    except tomllib.TOMLDecodeError as exc:
+        logger.warning("Invalid config file %s: %s", cfg_path, exc)
+        _CFG_CACHE = {}
     return _CFG_CACHE
 
 
