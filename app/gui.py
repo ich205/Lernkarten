@@ -12,7 +12,10 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
+import webbrowser
 import ttkbootstrap as tb
+from ttkbootstrap.tooltip import ToolTip
+from ttkbootstrap.toast import ToastNotification
 
 from openai import OpenAIError
 
@@ -68,6 +71,7 @@ def run_gui():
     btn_est.grid(row=0, column=1, padx=4)
     btn_start.grid(row=0, column=2, padx=4)
     btn_abort.grid(row=0, column=3, padx=4)
+    ToolTip(btn_start, text="Startet die Verarbeitung (Strg+R)")
 
     # Center PanedWindow
     center = tb.Panedwindow(root, orient="horizontal")
@@ -93,7 +97,9 @@ def run_gui():
     row += 1
 
     tb.Label(left, text="API‑Key").grid(row=row, column=0, sticky="w")
-    tb.Entry(left, textvariable=api_key_var, show="•").grid(row=row, column=1, sticky="ew", pady=(0,6))
+    ent_api = tb.Entry(left, textvariable=api_key_var, show="•")
+    ent_api.grid(row=row, column=1, sticky="ew", pady=(0,6))
+    ToolTip(ent_api, text="OpenAI API-Key (wird nicht gespeichert)")
     row += 1
 
     tb.Label(left, text="Label‑Modell").grid(row=row, column=0, sticky="w")
@@ -107,6 +113,7 @@ def run_gui():
     tb.Label(left, text="Gründlichkeit").grid(row=row, column=0, sticky="w")
     slider = tb.Scale(left, from_=4, to=16, value=thorough_var.get(), bootstyle="info")
     slider.grid(row=row, column=1, sticky="ew")
+    ToolTip(slider, text="4/8/16 Fragen pro Segment")
     def _slider(v):
         thorough_var.set(int(float(v)))
     slider.configure(command=_slider)
@@ -115,7 +122,9 @@ def run_gui():
     row += 1
 
     tb.Label(left, text="Budget (USD)").grid(row=row, column=0, sticky="w")
-    tb.Spinbox(left, from_=0.0, to=100.0, increment=0.5, textvariable=budget_var).grid(row=row, column=1, sticky="ew", pady=(0,6))
+    spin_budget = tb.Spinbox(left, from_=0.0, to=100.0, increment=0.5, textvariable=budget_var)
+    spin_budget.grid(row=row, column=1, sticky="ew", pady=(0,6))
+    ToolTip(spin_budget, text="Grenze für OpenAI-Kosten")
     row += 1
 
     tb.Checkbutton(left, text="Autom. herunterskalieren", variable=limit_by_budget_var).grid(row=row, column=1, sticky="w")
@@ -169,6 +178,10 @@ def run_gui():
         if p:
             out_dir_var.set(p)
 
+    def open_export() -> None:
+        p = out_dir_var.get().strip() or "."
+        webbrowser.open(os.path.abspath(p))
+
     def estimate() -> None:
         p = file_path_var.get().strip()
         if not p:
@@ -213,11 +226,23 @@ def run_gui():
         def worker():
             try:
                 out = pipeline.run(p, out_dir=outd)
-                messagebox.showinfo("Fertig", f"Export erstellt:\n{out}")
+                root.after(
+                    0,
+                    lambda: ToastNotification(
+                        title="Fertig", message=f"Export erstellt:\n{out}"
+                    ).show_toast(),
+                )
             except (OSError, ValueError, RuntimeError, OpenAIError) as ex:
                 logger.exception("Fehler bei der Pipeline-Ausführung")
                 log(f"[FEHLER] {ex}")
-                messagebox.showerror("Fehler", f"{ex.__class__.__name__}: {ex}")
+                root.after(
+                    0,
+                    lambda: ToastNotification(
+                        title="Fehler",
+                        message=f"{ex.__class__.__name__}: {ex}",
+                        bootstyle="danger",
+                    ).show_toast(),
+                )
         threading.Thread(target=worker, daemon=True).start()
 
     def on_close() -> None:
@@ -231,6 +256,10 @@ def run_gui():
     btn_est.configure(command=estimate)
     btn_start.configure(command=start)
     btn_abort.configure(command=on_close)
+
+    root.bind("<Control-o>", lambda e: choose_file())
+    root.bind("<Control-r>", lambda e: start())
+    root.bind("<Control-e>", lambda e: open_export())
 
     if source in {"config", "file"}:
         messagebox.showwarning(
