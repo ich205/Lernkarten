@@ -82,6 +82,8 @@ class LernkartenPipeline:
         total = len(segments)
         for i, s in enumerate(segments, 1):
             if not s.keep:
+                if progress_cb:
+                    progress_cb(i, total, card_count)
                 continue
             if stop_cb and stop_cb():
                 raise RuntimeError("Abgebrochen")
