@@ -111,8 +111,16 @@ def run_gui():
     row += 1
 
     tb.Label(left, text="Gründlichkeit").grid(row=row, column=0, sticky="w")
-    slider = tb.Scale(left, from_=4, to=16, value=thorough_var.get(), bootstyle="info")
+    slider = tb.Scale(
+        left,
+        from_=4,
+        to=16,
+        value=thorough_var.get(),
+        bootstyle="info",
+        length=180,
+    )
     slider.grid(row=row, column=1, sticky="ew")
+    slider.configure(sliderlength=24)
     ToolTip(slider, text="4/8/16 Fragen pro Segment")
     def _slider(v):
         thorough_var.set(int(float(v)))

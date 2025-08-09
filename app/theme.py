@@ -2,6 +2,7 @@ from __future__ import annotations
 import platform, json, os, atexit
 import ttkbootstrap as tb
 import tkinter as tk
+import tkinter.font as tkfont
 from ttkbootstrap.tooltip import ToolTip
 
 BASE_THEME = "superhero"      # Ausgangsbasis
@@ -17,6 +18,7 @@ def make_root(title: str = "GSA Flashcards", theme: str = DEFAULT_THEME) -> tb.W
         root.style.theme_use(theme)
     except Exception:
         root.style.theme_use(BASE_THEME)
+    _apply_readability_tweaks(root)
     root.minsize(960, 640)                 # genug Platz für 13" Displays
     _restore_geometry(root)                # letzte Fenstergröße wiederherstellen
     _persist_geometry_on_exit(root)
@@ -62,5 +64,27 @@ def _persist_geometry_on_exit(root: tk.Tk):
 def _load_user_theme(style: tb.Style) -> None:
     try:
         style.load_user_themes(THEME_FILE)
+    except Exception:
+        pass
+
+
+def _apply_readability_tweaks(root: tk.Tk) -> None:
+    """Moderate Verbesserungen für Lesbarkeit und Bedienbarkeit."""
+    try:
+        for name in ("TkDefaultFont", "TkTextFont", "TkHeadingFont", "TkMenuFont"):
+            f = tkfont.nametofont(name)
+            f.configure(size=f.cget("size") + 1)
+    except Exception:
+        pass
+
+    try:
+        root.tk.call("tk", "scaling", 1.15)
+    except Exception:
+        pass
+
+    try:
+        style = root.style
+        style.configure("TButton", padding=(8, 6))
+        style.configure("TScale", sliderlength=24)
     except Exception:
         pass
