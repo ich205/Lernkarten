@@ -13,6 +13,8 @@ from time import sleep
 import json
 import random
 
+from .pipeline_models import QAItem
+
 try:
     from openai import OpenAIError
 except ImportError:  # pragma: no cover - optional dependency
@@ -127,10 +129,10 @@ class OpenAIClient:
             data = {"label": "Fakt", "keep": True, "reason": "fallback"}
         return data
 
-    def gen_qa_for_chunk(self, text: str, n_questions: int, language: str = DEFAULT_LANGUAGE) -> List[Dict[str, str]]:
+    def gen_qa_for_chunk(self, text: str, n_questions: int, language: str = DEFAULT_LANGUAGE) -> List[QAItem]:
         """
         Erzeugt n_questions Lernkarten (Frage/Antwort) fuer den gegebenen Text.
-        Rueckgabe: [{"frage": "...", "antwort": "..."}, ...]
+        Rueckgabe: [QAItem(frage="...", antwort="..."), ...]
         """
         client = self._get_client()
         system = (
@@ -162,12 +164,12 @@ class OpenAIClient:
                 items = data["items"]
             else:
                 items = data
-            out = []
+            out: List[QAItem] = []
             for it in items:
                 q = (it.get("frage") or it.get("question") or "").strip()
                 a = (it.get("antwort") or it.get("answer") or "").strip()
                 if q and a:
-                    out.append({"frage": q, "antwort": a})
+                    out.append(QAItem(frage=q, antwort=a))
             return out
         except (json.JSONDecodeError, KeyError, TypeError):
             logger.warning("Failed to parse QA response: %r", content)

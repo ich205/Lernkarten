@@ -15,12 +15,7 @@ from .config import PRICES, ESTIMATE
 from .openai_client import OpenAIClient, OpenAISettings
 from .pdf_ingest import extract_text_from_pdf, segment_text
 from .excel_export import to_excel
-
-@dataclass
-class Segment:
-    text: str
-    label: str | None = None
-    keep: bool = True
+from .pipeline_models import Segment, QAItem, CardRow
 
 @dataclass
 class CostBreakdown:
@@ -78,12 +73,12 @@ class LernkartenPipeline:
         pause_event: Any | None = None,
         card_cb: Optional[Callable[[str, str, str], None]] = None,
         max_workers: int = 3,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[CardRow]:
         """Generiert Lernkarten dynamisch je nach Segmentlänge.
 
         Bei kleinen Inputs wird sequenziell gearbeitet; ab vier Segmenten wird
         standardmäßig parallelisiert (max. ``max_workers`` Threads)."""
-        rows: List[Dict[str, Any]] = []
+        rows: List[CardRow] = []
         card_count = 0
         total = len(segments)
 
@@ -100,7 +95,7 @@ class LernkartenPipeline:
                     pause_event.wait()
                 tokens = self.tok.count(s.text)
                 n_questions = max(1, min(max_questions_per_chunk, tokens // 100))
-                items = self.client.gen_qa_for_chunk(
+                items: List[QAItem] = self.client.gen_qa_for_chunk(
                     s.text[:8000], n_questions, language=language
                 )
                 if not items:
@@ -110,26 +105,25 @@ class LernkartenPipeline:
                 fragen: List[str] = []
                 antworten: List[str] = []
                 for x in items:
-                    fragen.append(x["frage"])
-                    antworten.append(x["antwort"])
+                    fragen.append(x.frage)
+                    antworten.append(x.antwort)
                     if card_cb:
-                        card_cb(s.text, x["frage"], x["antwort"])
+                        card_cb(s.text, x.frage, x.antwort)
                 card_count += len(items)
                 rows.append(
-                    {
-                        "original": s.text,
-                        "fragen": fragen,
-                        "antworten": antworten,
-                        "labels": [s.label] if s.label else [],
-                        "hinweise": "",
-                    }
+                    CardRow(
+                        original=s.text,
+                        fragen=fragen,
+                        antworten=antworten,
+                        labels=[s.label] if getattr(s, "label", None) else [],
+                    )
                 )
                 if progress_cb:
                     progress_cb(i, total, card_count)
             return rows
 
         # --- Parallel: groessere Inputs ---
-        indexed_rows: Dict[int, Dict[str, Any]] = {}
+        indexed_rows: Dict[int, CardRow] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures: Dict[Any, Tuple[int, Segment]] = {}
             for i, s in enumerate(segments, 1):
@@ -151,7 +145,7 @@ class LernkartenPipeline:
             for fut in as_completed(futures):
                 i, s = futures[fut]
                 try:
-                    items = fut.result()
+                    items: List[QAItem] = fut.result()
                 except Exception:
                     items = None
                 if not items:
@@ -161,18 +155,17 @@ class LernkartenPipeline:
                 fragen: List[str] = []
                 antworten: List[str] = []
                 for x in items:
-                    fragen.append(x["frage"])
-                    antworten.append(x["antwort"])
+                    fragen.append(x.frage)
+                    antworten.append(x.antwort)
                     if card_cb:
-                        card_cb(s.text, x["frage"], x["antwort"])
+                        card_cb(s.text, x.frage, x.antwort)
                 card_count += len(items)
-                indexed_rows[i] = {
-                    "original": s.text,
-                    "fragen": fragen,
-                    "antworten": antworten,
-                    "labels": [s.label] if s.label else [],
-                    "hinweise": "",
-                }
+                indexed_rows[i] = CardRow(
+                    original=s.text,
+                    fragen=fragen,
+                    antworten=antworten,
+                    labels=[s.label] if getattr(s, "label", None) else [],
+                )
                 if progress_cb:
                     progress_cb(i, total, card_count)
 
@@ -229,7 +222,7 @@ class LernkartenPipeline:
     def tokens_in_text(self, text: str) -> int:
         return self.tok.count(text)
 
-    def export_excel(self, rows: List[Dict[str, Any]], out_path: str) -> None:
+    def export_excel(self, rows: List[CardRow], out_path: str) -> None:
         to_excel(rows, out_path)
 
 

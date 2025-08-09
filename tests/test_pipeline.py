@@ -1,6 +1,7 @@
-from app.pipeline import LernkartenPipeline, Segment
+from app.pipeline import LernkartenPipeline
 from app.openai_client import OpenAISettings
 from app.config import GPT5_NANO, GPT5_MINI
+from app.pipeline_models import Segment, QAItem, CardRow
 
 
 def test_estimate_cost():
@@ -33,7 +34,7 @@ def test_generate_cards_reports_all_segments(monkeypatch):
     monkeypatch.setattr(
         pipeline.client,
         "gen_qa_for_chunk",
-        lambda text, n_questions, language: [{"frage": "f", "antwort": "a"}] * n_questions,
+        lambda text, n_questions, language: [QAItem("f", "a")] * n_questions,
     )
 
     segments = [
@@ -46,7 +47,7 @@ def test_generate_cards_reports_all_segments(monkeypatch):
     def progress(i, total, cards):
         calls.append((i, total, cards))
 
-    pipeline.generate_cards(
+    rows = pipeline.generate_cards(
         segments,
         max_questions_per_chunk=2,
         language="de",
@@ -55,6 +56,7 @@ def test_generate_cards_reports_all_segments(monkeypatch):
 
     assert [c[0] for c in calls] == [1, 2, 3]
     assert len(calls) == len(segments)
+    assert all(isinstance(r, CardRow) for r in rows)
 
 
 def test_generate_cards_skips_empty_items(monkeypatch):
