@@ -33,6 +33,7 @@ from .config import (
     GPT5_MINI,
     GPT5_NANO,
     DEFAULT_LANGUAGE,
+    load_api_key,
 )
 from .pipeline import LernkartenPipeline
 from .openai_client import OpenAISettings
@@ -57,7 +58,8 @@ class App:
         root.geometry("920x640")
 
         self.file_path = StringVar(value="")
-        self.api_key = StringVar(value="")
+        key, source = load_api_key()
+        self.api_key = StringVar(value=key)
         self.classify_model = StringVar(value=DEFAULT_CLASSIFY_MODEL)
         self.qa_model = StringVar(value=DEFAULT_QA_MODEL)
         self.questions_per_chunk = IntVar(value=8)
@@ -75,6 +77,12 @@ class App:
         self._total_pages = 0
 
         self.build_ui()
+        if source in {"config", "file"}:
+            messagebox.showwarning(
+                APP_TITLE,
+                "API-Key wurde aus einer Datei geladen. Speicherung im Klartext ist riskant.",
+            )
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def build_ui(self):
         frm = ttk.Frame(self.root, padding=10)
@@ -91,6 +99,11 @@ class App:
         # Row 1: API Key
         ttk.Label(frm, text="OpenAI API-Key:").grid(row=1, column=0, sticky=W, pady=(8,0))
         ttk.Entry(frm, textvariable=self.api_key, width=50, show="•").grid(row=1, column=1, sticky=(E,W), pady=(8,0))
+        ttk.Label(
+            frm,
+            text="⚠ wird nicht gespeichert",
+            foreground="red",
+        ).grid(row=1, column=2, sticky=W, pady=(8,0))
 
         # Row 2: Modelle
         model_values = (GPT5, GPT5_MINI, GPT5_NANO)
@@ -246,6 +259,10 @@ class App:
     def resume(self):
         self._pause_event.set()
         self.progress.set("Fortsetzen …")
+
+    def on_close(self):
+        self.api_key.set("")
+        self.root.destroy()
 
     def _run_pipeline_thread(self):
         try:

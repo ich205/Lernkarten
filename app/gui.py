@@ -16,7 +16,7 @@ from tkinter import ttk, filedialog, messagebox
 
 from openai import OpenAIError
 
-from .config import load_config
+from .config import load_config, load_api_key
 from .pipeline import Pipeline
 from .cost import estimate_cost_for_text
 from .pdf_utils import try_extract_text
@@ -30,6 +30,8 @@ LOG_MAX_LINES = 1000
 
 def run_gui():
     cfg = load_config()
+
+    api_key_initial, source = load_api_key(cfg)
 
     root = tk.Tk()
     root.title(APP_TITLE)
@@ -45,7 +47,7 @@ def run_gui():
         pass
 
     # State variables
-    api_key_var = tk.StringVar(value="")
+    api_key_var = tk.StringVar(value=api_key_initial)
     file_path_var = tk.StringVar(value="")
     out_dir_var = tk.StringVar(value=os.path.abspath("."))
     thorough_var = tk.IntVar(value=int(cfg["prompting"].get("max_questions_per_chunk_default", 8)))
@@ -80,7 +82,7 @@ def run_gui():
     ttk.Separator(left).grid(sticky="ew", pady=6)
     ttk.Label(left, text="2) API‑Key (nur für diese Sitzung)").grid(sticky="w")
     ttk.Entry(left, textvariable=api_key_var, width=40, show="•").grid(sticky="w")
-    ttk.Label(left, text="Tipp: .env optional möglich (nicht empfohlen)").grid(sticky="w")
+    ttk.Label(left, text="⚠ sensibler Schlüssel – nicht speichern", foreground="red").grid(sticky="w")
 
     ttk.Separator(left).grid(sticky="ew", pady=6)
     ttk.Label(left, text="3) Modelle").grid(sticky="w")
@@ -156,7 +158,9 @@ def run_gui():
         if not p:
             messagebox.showerror("Fehler", "Bitte Datei wählen.")
             return
-        api = api_key_var.get().strip() or os.environ.get("OPENAI_API_KEY","")
+        api = api_key_var.get().strip()
+        if not api:
+            api, _ = load_api_key(cfg)
         if not api:
             messagebox.showerror("Fehler", "Bitte API‑Key eingeben (nur für diese Sitzung).")
             return
@@ -186,5 +190,17 @@ def run_gui():
 
     ttk.Button(btn_row, text="Schätzung", command=estimate).grid(row=0, column=0, padx=4)
     ttk.Button(btn_row, text="Start", command=start).grid(row=0, column=1, padx=4)
+
+    def on_close():
+        api_key_var.set("")
+        root.destroy()
+
+    if source in {"config", "file"}:
+        messagebox.showwarning(
+            APP_TITLE,
+            "API-Key wurde aus einer Datei geladen. Klartextspeicherung ist riskant.",
+        )
+
+    root.protocol("WM_DELETE_WINDOW", on_close)
 
     root.mainloop()
