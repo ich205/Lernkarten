@@ -63,16 +63,35 @@ def split_into_chunks(text: str, target_tokens: int = 600, overlap_tokens: int =
     return [c for c in chunks if c.strip()]
 
 def is_heading_like(line: str) -> bool:
+    """Prüft heuristisch, ob eine Zeile wie eine Überschrift wirkt.
+
+    Args:
+        line: Die zu prüfende Zeile.
+
+    Returns:
+        True, wenn die Zeile als Überschrift interpretiert wird.
+    """
     l = line.strip()
-    if not l: return False
+    if not l:
+        return False
     if len(l) < 80 and (l.isupper() or re.match(r"^\d+(\.\d+)*\s", l) or l.endswith(":")):
         # keine Satzendepunkte, wenig Kommas → Überschrift-Indiz
-        if re.search(r"[\.!?]{2,}", l): 
+        if re.search(r"[\.!?]{2,}", l):
             return False
         return True
     return False
 
-def smart_split(block: str, target_tokens: int, max_chars: int):
+def smart_split(block: str, target_tokens: int, max_chars: int) -> list[str]:
+    """Teilt einen Textblock anhand von Absätzen in tokenbegrenzte Stücke.
+
+    Args:
+        block: Eingabetext, der zerlegt werden soll.
+        target_tokens: Maximale Tokenzahl pro Teilblock.
+        max_chars: Maximale Zeichenzahl, bevor ein harter Schnitt erfolgt.
+
+    Returns:
+        Liste von Teilblöcken, die die Limits nicht überschreiten.
+    """
     # Split an Absatz/Satzenden
     paras = re.split(r"\n{2,}", block)
     out, buf = [], ""
@@ -84,12 +103,24 @@ def smart_split(block: str, target_tokens: int, max_chars: int):
         if count_tokens_rough(buf + "\n\n" + p) <= target_tokens:
             buf = (buf + "\n\n" + p).strip() if buf else p
         else:
-            if buf: out.append(buf)
+            if buf:
+                out.append(buf)
             buf = p
-    if buf: out.append(buf)
+    if buf:
+        out.append(buf)
     return out
 
-def split_by_sentences(text: str, target_tokens: int, max_chars: int):
+def split_by_sentences(text: str, target_tokens: int, max_chars: int) -> list[str]:
+    """Zerlegt Text an Satzgrenzen unter Einhaltung eines Tokenlimits.
+
+    Args:
+        text: Der zu zerlegende Text.
+        target_tokens: Maximale Tokenzahl pro Satzgruppe.
+        max_chars: Maximale Zeichenzahl für einen Satz.
+
+    Returns:
+        Liste von Textsegmenten, die das Limit nicht überschreiten.
+    """
     sents = re.split(r"(?<=[\.\?!])\s+", text)
     out, buf = [], ""
     for s in sents:
@@ -102,7 +133,8 @@ def split_by_sentences(text: str, target_tokens: int, max_chars: int):
                     if count_tokens_rough(buf + " " + p) <= target_tokens:
                         buf = (buf + " " + p).strip()
                     else:
-                        out.append(buf); buf = p
+                        out.append(buf)
+                        buf = p
                 else:
                     buf = p
             continue
@@ -110,19 +142,32 @@ def split_by_sentences(text: str, target_tokens: int, max_chars: int):
             if count_tokens_rough(buf + " " + s) <= target_tokens:
                 buf = (buf + " " + s).strip()
             else:
-                out.append(buf); buf = s
+                out.append(buf)
+                buf = s
         else:
             buf = s
-    if buf: out.append(buf)
+    if buf:
+        out.append(buf)
     return out
 
-def take_last_sentences(text: str, approx_tokens: int = 60):
-    if not text: return ""
+def take_last_sentences(text: str, approx_tokens: int = 60) -> str:
+    """Gibt die letzten Sätze eines Textes bis zu einer Tokenobergrenze zurück.
+
+    Args:
+        text: Vollständiger Text.
+        approx_tokens: Ungefähre Anzahl an Tokens, die zurückgegeben werden sollen.
+
+    Returns:
+        Die letzten Sätze des Textes als String.
+    """
+    if not text:
+        return ""
     sents = re.split(r"(?<=[\.\?!])\s+", text.strip())
     acc, out = 0, []
     for s in reversed(sents):
         t = count_tokens_rough(s)
-        if acc + t > approx_tokens: break
+        if acc + t > approx_tokens:
+            break
         out.append(s)
         acc += t
     return " ".join(reversed(out))
