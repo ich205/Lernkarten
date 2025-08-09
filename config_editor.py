@@ -16,7 +16,14 @@ class ConfigEditor(tk.Tk):
         gear_button.pack(expand=True)
 
     def open_editor(self) -> None:
-        cfg = toml.load(CONFIG_PATH)
+        try:
+            cfg = toml.load(CONFIG_PATH)
+        except (FileNotFoundError, toml.TomlDecodeError):
+            cfg = {}
+            messagebox.showwarning(
+                "Warnung",
+                "Konfiguration konnte nicht geladen werden. Es wird eine leere Konfiguration verwendet.",
+            )
 
         top = tk.Toplevel(self)
         top.title("Einstellungen")
