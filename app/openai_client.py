@@ -9,7 +9,7 @@ werden von `pipeline.LernkartenPipeline` genutzt und greifen auf Werte aus
 from __future__ import annotations
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-import time
+from time import sleep
 import json
 import random
 
@@ -34,9 +34,9 @@ def retry_request(func, *args, **kwargs):
             Kontrollparameter:
             - n: maximale Anzahl Versuche (Standard: 3)
             - delay: Anfangspause zwischen den Versuchen in Sekunden
-              (Standard: 1). Zwischen den Versuchen wird zusätzlich ein
-              zufälliger Jitter von 0 bis 1 Sekunde addiert, um
-              gleichzeitige Wiederholungen zu entzerren.
+              (Standard: 1). Zwischen den Versuchen wird ein vollständiger
+              Jitter (0 bis delay) verwendet, um gleichzeitige
+              Wiederholungen zu entzerren.
             - backoff: Faktor, mit dem die Pause nach jedem Fehlschlag
               multipliziert wird (Standard: 2)
     """
@@ -48,7 +48,7 @@ def retry_request(func, *args, **kwargs):
     for attempt in range(1, max_attempts + 1):
         try:
             return func(*args, **kwargs)
-        except (OpenAIError, OSError, ValueError) as exc:
+        except OpenAIError as exc:
             if attempt == max_attempts:
                 logger.warning(
                     "API request failed after %s attempts: %s", attempt, exc
@@ -63,7 +63,8 @@ def retry_request(func, *args, **kwargs):
                 exc,
                 delay,
             )
-            time.sleep(delay + random.uniform(0, 1))
+            sleep_time = random.uniform(0, delay)
+            sleep(sleep_time)
             delay *= backoff
 
 @dataclass
