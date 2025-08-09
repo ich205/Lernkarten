@@ -24,7 +24,11 @@ def _costs_for_model(model_name: str, in_tokens: int, out_tokens: int, cached_ra
 
 def estimate_cost_for_text(text: str, model: str, label_model: str, questions_per_chunk: int = 8):
     cfg = load_config()
-    chunks = split_into_chunks(text, cfg["chunking"]["target_tokens"], cfg["chunking"]["overlap_tokens"], cfg["chunking"]["max_chars_per_chunk"])
+    chunk_cfg = cfg.get("chunking", {})
+    target_tokens = chunk_cfg.get("target_tokens", 600)
+    overlap_tokens = chunk_cfg.get("overlap_tokens", 60)
+    max_chars = chunk_cfg.get("max_chars_per_chunk", 4000)
+    chunks = split_into_chunks(text, target_tokens, overlap_tokens, max_chars)
     # Grobe Annahme: Eingabe-Token = Summe der Chunk-Tokens; Ausgabe ≈ nQ * 30 Tokens
     in_tokens = sum(count_tokens_rough(c) for c in chunks)
     # Labeling (kurze JSON Antworten), grob 60 Tokens Out je Chunk

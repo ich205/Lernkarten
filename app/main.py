@@ -211,7 +211,6 @@ class App:
 
         try:
             from .pdf_ingest import extract_text_from_pdf, segment_text
-            from .tokenizer_utils import Tokenizer
             from pypdf import PdfReader
 
             txt = extract_text_from_pdf(path)

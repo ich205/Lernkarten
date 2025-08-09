@@ -12,7 +12,7 @@ import datetime
 def get_logger(name: str = "gsa") -> logging.Logger:
     """Return a module-specific logger configured once for the application."""
 
-    log_dir = pathlib.Path(".logs")
+    log_dir = pathlib.Path(__file__).resolve().parent / ".logs"
     log_dir.mkdir(exist_ok=True)
     logfile = log_dir / f"gsa_{datetime.datetime.now().strftime('%Y%m%d')}.log"
 
