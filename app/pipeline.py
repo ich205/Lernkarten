@@ -1,6 +1,6 @@
 # app/pipeline.py
 from __future__ import annotations
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Callable, Optional
 from dataclasses import dataclass
 from .tokenizer_utils import Tokenizer
 from .config import PRICES, ESTIMATE
@@ -31,28 +31,66 @@ class LernkartenPipeline:
         chunks = segment_text(raw)
         return [Segment(text=c) for c in chunks]
 
-    def classify(self, segments: List[Segment]) -> List[Segment]:
+    def classify(
+        self,
+        segments: List[Segment],
+        progress_cb: Optional[Callable[[int, int], None]] = None,
+        stop_cb: Optional[Callable[[], bool]] = None,
+        pause_event: Any | None = None,
+    ) -> List[Segment]:
+        """Klassifiziert Segmente und erlaubt Fortschritts-Callbacks sowie Stop/Pause."""
         out = []
-        for s in segments:
+        total = len(segments)
+        for i, s in enumerate(segments, 1):
+            if stop_cb and stop_cb():
+                raise RuntimeError("Abgebrochen")
+            if pause_event:
+                pause_event.wait()
             data = self.client.classify_segment(s.text[:5000])  # Sicherheit
-            s.label = data.get("label","Fakt")
+            s.label = data.get("label", "Fakt")
             s.keep = bool(data.get("keep", True))
             out.append(s)
+            if progress_cb:
+                progress_cb(i, total)
         return out
 
-    def generate_cards(self, segments: List[Segment], questions_per_chunk: int, language: str) -> List[Dict[str, Any]]:
-        rows = []
-        for s in segments:
+    def generate_cards(
+        self,
+        segments: List[Segment],
+        max_questions_per_chunk: int,
+        language: str,
+        progress_cb: Optional[Callable[[int, int, int], None]] = None,
+        stop_cb: Optional[Callable[[], bool]] = None,
+        pause_event: Any | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Generiert Lernkarten dynamisch je nach Segmentlänge."""
+        rows: List[Dict[str, Any]] = []
+        card_count = 0
+        total = len(segments)
+        for i, s in enumerate(segments, 1):
             if not s.keep:
                 continue
-            items = self.client.gen_qa_for_chunk(s.text[:8000], questions_per_chunk, language=language)
-            rows.append({
-                "original": s.text,
-                "fragen": [x["frage"] for x in items],
-                "antworten": [x["antwort"] for x in items],
-                "labels": [s.label] if s.label else [],
-                "hinweise": "",
-            })
+            if stop_cb and stop_cb():
+                raise RuntimeError("Abgebrochen")
+            if pause_event:
+                pause_event.wait()
+            tokens = self.tok.count(s.text)
+            n_questions = max(1, min(max_questions_per_chunk, tokens // 100))
+            items = self.client.gen_qa_for_chunk(
+                s.text[:8000], n_questions, language=language
+            )
+            card_count += len(items)
+            rows.append(
+                {
+                    "original": s.text,
+                    "fragen": [x["frage"] for x in items],
+                    "antworten": [x["antwort"] for x in items],
+                    "labels": [s.label] if s.label else [],
+                    "hinweise": "",
+                }
+            )
+            if progress_cb:
+                progress_cb(i, total, card_count)
         return rows
 
     # === Kosten-Schaetzung ===
