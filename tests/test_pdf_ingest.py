@@ -11,6 +11,23 @@ def test_segment_text_headings_and_blank_lines():
     ]
 
 
+def test_segment_text_heading_optional_filter():
+    text = "EINLEITUNG\n\nAbsatz 1.\n\nANHANG\n\nAbsatz 2."
+    keep = segment_text(text, min_len=10, max_len=100)
+    assert keep == [
+        "EINLEITUNG",
+        "Absatz 1.",
+        "ANHANG",
+        "Absatz 2.",
+    ]
+
+    filtered = segment_text(text, min_len=10, max_len=100, keep_headings=False)
+    assert filtered == [
+        "Absatz 1.",
+        "Absatz 2.",
+    ]
+
+
 def test_segment_text_respects_min_max_length():
     paragraphs = ["A" * 50, "B" * 50, "C" * 50]
     text = "\n\n".join(paragraphs)

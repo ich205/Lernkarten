@@ -43,9 +43,19 @@ def normalize_whitespace(s: str) -> str:
 # Grobe Segmentierung: nach Ueberschriften, Leerzeilen, Absatzenden.
 HEADING_RE = re.compile(r"^\s*(inhalt|einleitung|vorwort|ueberblick|herzlich willkommen|literaturverzeichnis|anhang|uebergeordnete lernziele|lernziele)\b", re.I)
 
-def segment_text(text: str, min_len: int = 300, max_len: int = 1200) -> List[str]:
-    """
-    Heuristisches Segmentieren: paragraphenweise sammeln, bis min_len erreicht, aber max_len nicht ueberschreiten.
+
+def segment_text(
+    text: str,
+    min_len: int = 300,
+    max_len: int = 1200,
+    keep_headings: bool = True,
+) -> List[str]:
+    """Segmentieren von Rohtext in Abschnitte.
+
+    Absätze werden gesammelt, bis ``min_len`` erreicht ist, ``max_len`` aber
+    nicht überschritten wird. Absätze, die auf ``HEADING_RE`` matchen, werden
+    als eigene Segmente behandelt oder – falls ``keep_headings`` ``False`` ist –
+    verworfen.
     """
     text = normalize_whitespace(text)
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
@@ -63,7 +73,12 @@ def segment_text(text: str, min_len: int = 300, max_len: int = 1200) -> List[str
         buf, cur_len = [], 0
 
     for p in paragraphs:
-        # Heading-only Absatz? — wir nehmen sie trotzdem auf; Nano-Label filtert spaeter raus.
+        if HEADING_RE.match(p):
+            flush()
+            if keep_headings:
+                segments.append(p)
+            continue
+
         plen = len(p)
         if cur_len + plen > max_len and cur_len >= min_len:
             flush()
