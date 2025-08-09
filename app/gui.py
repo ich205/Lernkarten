@@ -3,21 +3,19 @@
 Die GUI verbindet Benutzerinteraktionen mit der Pipeline. Viele
 Standardwerte (z. B. Startsprache, Fragen pro Chunk) stammen aus
 ``config.toml`` und werden über `load_config` eingelesen. Sie ruft
-`pipeline.Pipeline` auf, um PDFs einzulesen, OpenAI anzusprechen und die
+`pipeline.LernkartenPipeline` auf, um PDFs einzulesen, OpenAI anzusprechen und die
 Ergebnisse zu exportieren.
 """
 
 import os
 import threading
-import queue
-import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 from openai import OpenAIError
 
 from .config import load_config, load_api_key
-from .pipeline import Pipeline
+from .pipeline import LernkartenPipeline
 from .cost import estimate_cost_for_text
 from .pdf_utils import try_extract_text
 from .models import count_tokens_rough
@@ -166,7 +164,7 @@ def run_gui():
             return
         outd = out_dir_var.get().strip() or "."
         os.makedirs(outd, exist_ok=True)
-        pipeline = Pipeline(
+        pipeline = LernkartenPipeline(
             api_key=api,
             qa_model=model_var.get(),
             label_model=label_model_var.get(),
