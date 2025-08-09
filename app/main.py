@@ -38,6 +38,9 @@ class App:
         self._segments = None
         self._full_text = ""
         self._stop_flag = False
+        self._pause_event = threading.Event()
+        self._pause_event.set()
+        self._total_pages = 0
 
         self.build_ui()
 
@@ -70,7 +73,7 @@ class App:
         ttk.Combobox(frm, textvariable=self.language, values=("de","en"), width=10).grid(row=4, column=1, sticky=W)
 
         # Row 5: Slider
-        ttk.Label(frm, text="Fragen pro Chunk:").grid(row=5, column=0, sticky=W, pady=(8,0))
+        ttk.Label(frm, text="Max. Karten pro Segment:").grid(row=5, column=0, sticky=W, pady=(8,0))
         scale = ttk.Scale(frm, from_=2, to=24, orient="horizontal", command=self.on_scale)
         scale.set(self.questions_per_chunk.get())
         scale.grid(row=5, column=1, sticky=(E,W), pady=(8,0))
@@ -85,7 +88,9 @@ class App:
         btns.grid(row=7, column=0, columnspan=3, sticky=W, pady=(10,5))
         ttk.Button(btns, text="1) Segmentieren & Schaetzen", command=self.segment_and_estimate).grid(row=0, column=0, padx=5)
         ttk.Button(btns, text="2) Start (Labeln + Lernkarten + Export)", command=self.start_pipeline).grid(row=0, column=1, padx=5)
-        ttk.Button(btns, text="Abbrechen", command=self.cancel).grid(row=0, column=2, padx=5)
+        ttk.Button(btns, text="Pause", command=self.pause).grid(row=0, column=2, padx=5)
+        ttk.Button(btns, text="Fortsetzen", command=self.resume).grid(row=0, column=3, padx=5)
+        ttk.Button(btns, text="Abbrechen", command=self.cancel).grid(row=0, column=4, padx=5)
 
         # Row 8: Log
         ttk.Label(frm, text="Protokoll:").grid(row=8, column=0, sticky=W)
@@ -93,8 +98,10 @@ class App:
         self.log.grid(row=9, column=0, columnspan=3, sticky=(N,S,E,W))
         frm.rowconfigure(9, weight=1)
 
-        # Footer status
-        ttk.Label(frm, textvariable=self.progress).grid(row=10, column=0, columnspan=3, sticky=(W))
+        # Footer progress bar + status
+        self.progress_bar = ttk.Progressbar(frm, mode="determinate")
+        self.progress_bar.grid(row=10, column=0, columnspan=3, sticky=(E,W), pady=(5,0))
+        ttk.Label(frm, textvariable=self.progress).grid(row=11, column=0, columnspan=3, sticky=(W))
 
     def on_scale(self, val):
         try:
@@ -126,11 +133,17 @@ class App:
         try:
             from .pdf_ingest import extract_text_from_pdf, segment_text
             from .tokenizer_utils import Tokenizer
+            from pypdf import PdfReader
 
             txt = extract_text_from_pdf(path)
             self._full_text = txt
             segs = segment_text(txt)
             self._segments = segs
+            try:
+                reader = PdfReader(path)
+                self._total_pages = len(reader.pages)
+            except Exception:
+                self._total_pages = 0
             self.logln(f"Segmentiert: {len(segs)} Segmente.")
             self.progress.set(f"Segmentierung fertig: {len(segs)} Segmente.")
             self.update_cost_label()
@@ -184,12 +197,22 @@ class App:
             messagebox.showerror(APP_TITLE, "Bitte OpenAI API-Key eingeben (wird nicht gespeichert).")
             return
         self._stop_flag = False
+        self._pause_event.set()
+        self.progress_bar.configure(value=0, maximum=len(self._segments))
         t = threading.Thread(target=self._run_pipeline_thread, daemon=True)
         t.start()
 
     def cancel(self):
         self._stop_flag = True
         self.progress.set("Abbruch angefordert …")
+
+    def pause(self):
+        self._pause_event.clear()
+        self.progress.set("Pausiert …")
+
+    def resume(self):
+        self._pause_event.set()
+        self.progress.set("Fortsetzen …")
 
     def _run_pipeline_thread(self):
         try:
@@ -199,24 +222,52 @@ class App:
                 qa_model=self.qa_model.get().strip(),
             )
             pipe = LernkartenPipeline(settings)
+
             # Labeln
             self.progress.set("Labeln (Nano) …")
             self.logln("Starte Klassifikation (Nano)…")
-            seg_objs = []
-            for t in self._segments:
-                if self._stop_flag: raise RuntimeError("Abgebrochen")
-                seg_objs.append(t)
-            seg_objs = pipe.classify(seg_objs)
+            self.progress_bar.configure(value=0, maximum=len(self._segments))
+
+            seg_objs = [s for s in self._segments]
+
+            def cls_cb(i, total):
+                self.progress_bar.configure(value=i, maximum=total)
+                self.progress.set(f"Klassifikation {i}/{total}")
+
+            seg_objs = pipe.classify(
+                seg_objs,
+                progress_cb=cls_cb,
+                stop_cb=lambda: self._stop_flag,
+                pause_event=self._pause_event,
+            )
 
             filtered = [s for s in seg_objs if s.keep]
             removed = len(seg_objs) - len(filtered)
-            self.logln(f"Gefiltert: {removed} Segmente verworfen (Ueberschrift/Gliederung/Vorwort). "
-                       f"{len(filtered)} verbleiben.")
+            self.logln(
+                f"Gefiltert: {removed} Segmente verworfen (Ueberschrift/Gliederung/Vorwort). "
+                f"{len(filtered)} verbleiben."
+            )
 
             # Lernkarten
             self.progress.set("Erzeuge Lernkarten …")
             self.logln("Fragen/Antworten werden generiert …")
-            rows = pipe.generate_cards(filtered, self.questions_per_chunk.get(), self.language.get())
+            self.progress_bar.configure(value=0, maximum=len(filtered))
+
+            def gen_cb(i, total, card_count):
+                self.progress_bar.configure(value=i, maximum=total)
+                page = int((i / max(1, total)) * self._total_pages) + 1 if self._total_pages else i
+                self.progress.set(
+                    f"Segment {i}/{total} (Seite ~{page}) – Karten {card_count}"
+                )
+
+            rows = pipe.generate_cards(
+                filtered,
+                self.questions_per_chunk.get(),
+                self.language.get(),
+                progress_cb=gen_cb,
+                stop_cb=lambda: self._stop_flag,
+                pause_event=self._pause_event,
+            )
 
             # Export
             out_path = os.path.join(os.path.dirname(__file__), "..", "output.xlsx")
