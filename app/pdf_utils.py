@@ -5,7 +5,12 @@ oder alternativen Quellen zu extrahieren und grob zu bereinigen.
 """
 
 from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 import re, os, pathlib
+
+from .logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 def extract_text_from_pdf(path):
     reader = PdfReader(path)
@@ -13,7 +18,8 @@ def extract_text_from_pdf(path):
     for i, page in enumerate(reader.pages):
         try:
             t = page.extract_text() or ""
-        except Exception:
+        except (PdfReadError, KeyError) as err:
+            logger.warning("Text auf Seite %s konnte nicht extrahiert werden: %s", i, err)
             t = ""
         # rudimentäre Bereinigung
         t = _cleanup_page_text(t)

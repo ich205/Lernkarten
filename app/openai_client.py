@@ -11,9 +11,13 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import time
 import json
-import logging
+
+from openai import OpenAIError
 
 from .config import DEFAULT_CLASSIFY_MODEL, DEFAULT_QA_MODEL, DEFAULT_LANGUAGE
+from .logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 def retry_request(func, *args, **kwargs):
@@ -38,15 +42,15 @@ def retry_request(func, *args, **kwargs):
     for attempt in range(1, max_attempts + 1):
         try:
             return func(*args, **kwargs)
-        except Exception as exc:
+        except (OpenAIError, OSError, ValueError) as exc:
             if attempt == max_attempts:
-                logging.warning(
+                logger.warning(
                     "API request failed after %s attempts: %s", attempt, exc
                 )
                 raise RuntimeError(
                     f"Request failed after {max_attempts} attempts"
                 ) from exc
-            logging.warning(
+            logger.warning(
                 "API request failed (attempt %s/%s): %s – retrying in %ss",
                 attempt,
                 max_attempts,
@@ -73,8 +77,10 @@ class OpenAIClient:
         if self._client is None:
             try:
                 from openai import OpenAI
-            except Exception as e:
-                raise RuntimeError("Das 'openai'-Paket ist nicht installiert. Bitte fuehre install.bat aus.") from e
+            except ImportError as e:
+                raise RuntimeError(
+                    "Das 'openai'-Paket ist nicht installiert. Bitte fuehre install.bat aus."
+                ) from e
             self._client = OpenAI(api_key=self.settings.api_key)
         return self._client
 
@@ -108,8 +114,8 @@ class OpenAIClient:
         )
         try:
             data = json.loads(resp.choices[0].message.content)
-        except Exception:
-            data = {"label":"Fakt", "keep": True, "reason":"fallback"}
+        except json.JSONDecodeError:
+            data = {"label": "Fakt", "keep": True, "reason": "fallback"}
         return data
 
     def gen_qa_for_chunk(self, text: str, n_questions: int, language: str = DEFAULT_LANGUAGE) -> List[Dict[str, str]]:
@@ -154,5 +160,5 @@ class OpenAIClient:
                 if q and a:
                     out.append({"frage": q, "antwort": a})
             return out
-        except Exception:
+        except (json.JSONDecodeError, KeyError, TypeError):
             return []

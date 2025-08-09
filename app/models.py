@@ -9,12 +9,16 @@ Pipeline-Abstraktion nötig ist.
 import os, time, hashlib, json, math
 from typing import Dict, Any
 
+import requests
+
 def _get_openai_client():
     # Import on demand to avoid hard dependency at import time
     try:
         from openai import OpenAI
-    except Exception as ex:
-        raise RuntimeError("OpenAI-Python-Client nicht installiert. Bitte 'python install.py' ausführen.") from ex
+    except ImportError as ex:
+        raise RuntimeError(
+            "OpenAI-Python-Client nicht installiert. Bitte 'python install.py' ausführen."
+        ) from ex
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY ist nicht gesetzt (wird zur Laufzeit aus GUI übergeben).")
@@ -29,7 +33,7 @@ def count_tokens_rough(text: str) -> int:
         import tiktoken
         enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(text))
-    except Exception:
+    except (ImportError, ValueError, requests.exceptions.RequestException):
         return max(1, math.ceil(len(text) / 4))
 
 def call_json_chat(model: str, system_prompt: str, user_prompt: str, temperature: float = 0.1, max_output_tokens: int = 600) -> Dict[str, Any]:
@@ -48,7 +52,7 @@ def call_json_chat(model: str, system_prompt: str, user_prompt: str, temperature
     raw = response.choices[0].message.content
     try:
         data = json.loads(raw)
-    except Exception:
+    except json.JSONDecodeError:
         data = {"_raw": raw}
     usage = getattr(response, "usage", None)
     usage_dict = {"prompt_tokens": None, "completion_tokens": None, "total_tokens": None}

@@ -14,11 +14,16 @@ import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+from openai import OpenAIError
+
 from .config import load_config
 from .pipeline import Pipeline
 from .cost import estimate_cost_for_text
 from .pdf_utils import try_extract_text
 from .models import count_tokens_rough
+from .logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 APP_TITLE = "GSA Flashcards (GPT‑5 Serie)"
 LOG_MAX_LINES = 1000
@@ -33,10 +38,10 @@ def run_gui():
     # Theming
     style = ttk.Style()
     try:
-        if cfg["ui"].get("theme","auto") == "dark":
+        if cfg["ui"].get("theme", "auto") == "dark":
             root.tk.call("tk", "scaling", 1.1)
         style.theme_use("clam")
-    except Exception:
+    except tk.TclError:
         pass
 
     # State variables
@@ -173,9 +178,10 @@ def run_gui():
             try:
                 out = pipeline.run(p, out_dir=outd)
                 messagebox.showinfo("Fertig", f"Export erstellt:\n{out}")
-            except Exception as ex:
+            except (OSError, ValueError, RuntimeError, OpenAIError) as ex:
+                logger.exception("Fehler bei der Pipeline-Ausführung")
                 log(f"[FEHLER] {ex}")
-                messagebox.showerror("Fehler", str(ex))
+                messagebox.showerror("Fehler", f"{ex.__class__.__name__}: {ex}")
         threading.Thread(target=worker, daemon=True).start()
 
     ttk.Button(btn_row, text="Schätzung", command=estimate).grid(row=0, column=0, padx=4)

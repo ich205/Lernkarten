@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 try:  # Python 3.11+
     import tomllib  # type: ignore[attr-defined]
-except Exception:  # pragma: no cover - fallback for Python <3.11
+except ModuleNotFoundError:  # pragma: no cover - fallback für Python <3.11
     import tomli as tomllib  # type: ignore
 
 # Modellnamen sind konfigurierbar – passe sie ggf. an deinen Account an.
