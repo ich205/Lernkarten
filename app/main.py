@@ -8,8 +8,6 @@ aus einem Skript heraus verwendet werden kann.
 from __future__ import annotations
 import os, sys, threading
 from tkinter import (
-    Tk,
-    ttk,
     filedialog,
     StringVar,
     IntVar,
@@ -23,6 +21,9 @@ from tkinter import (
     messagebox,
     TclError,
 )
+import ttkbootstrap as tb
+from ttkbootstrap import ttk
+from app.theme import make_root, attach_theme_toggle
 from pypdf.errors import PdfReadError
 from openai import OpenAIError
 
@@ -45,7 +46,7 @@ APP_TITLE = "Lernkarten-Generator (Installer-fix)"
 
 def safe_tk():
     try:
-        root = Tk()
+        root = make_root(APP_TITLE)
         return root
     except TclError as e:
         logger.exception("Fehler beim Starten der GUI")
@@ -370,12 +371,8 @@ class App:
 
 def main():
     root = safe_tk()
-    style = ttk.Style(root)
-    # Nutze system theme
-    try:
-        style.theme_use(style.theme_use())
-    except TclError:
-        pass
+    style = tb.Style()
+    attach_theme_toggle(root, style)
     App(root)
     root.mainloop()
 
