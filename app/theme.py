@@ -4,12 +4,19 @@ import ttkbootstrap as tb
 import tkinter as tk
 from ttkbootstrap.tooltip import ToolTip
 
-DEFAULT_THEME = "superhero"   # dunkel / blau
+BASE_THEME = "superhero"      # Ausgangsbasis
+DEFAULT_THEME = "superhero_lila"  # dunkel / blau mit lila Akzent
 ALT_THEME = "flatly"          # hell / modern
+THEME_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "superhero_lila.json"))
 
 def make_root(title: str = "GSA Flashcards", theme: str = DEFAULT_THEME) -> tb.Window:
     _enable_hidpi_awareness()
-    root = tb.Window(title=title, themename=theme)
+    root = tb.Window(title=title, themename=BASE_THEME)
+    _load_user_theme(root.style)
+    try:
+        root.style.theme_use(theme)
+    except Exception:
+        root.style.theme_use(BASE_THEME)
     root.minsize(960, 640)                 # genug Platz für 13" Displays
     _restore_geometry(root)                # letzte Fenstergröße wiederherstellen
     _persist_geometry_on_exit(root)
@@ -51,3 +58,9 @@ def _persist_geometry_on_exit(root: tk.Tk):
             json.dump({"geometry": root.wm_geometry()}, open(cfg, "w", encoding="utf-8"))
         except Exception:
             pass
+
+def _load_user_theme(style: tb.Style) -> None:
+    try:
+        style.load_user_themes(THEME_FILE)
+    except Exception:
+        pass
