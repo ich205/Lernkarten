@@ -10,8 +10,9 @@ Ergebnisse zu exportieren.
 import os
 import threading
 import tkinter as tk
-from ttkbootstrap import ttk
 from tkinter import filedialog, messagebox
+from tkinter.scrolledtext import ScrolledText
+import ttkbootstrap as tb
 
 from openai import OpenAIError
 
@@ -45,92 +46,130 @@ def run_gui():
     out_dir_var = tk.StringVar(value=os.path.abspath("."))
     thorough_var = tk.IntVar(value=int(cfg["prompting"].get("max_questions_per_chunk_default", 8)))
     budget_var = tk.DoubleVar(value=2.0)
-    model_var = tk.StringVar(value=cfg["models"].get("qa_model","gpt-5-mini"))
-    label_model_var = tk.StringVar(value=cfg["models"].get("label_model","gpt-5-nano"))
+    model_var = tk.StringVar(value=cfg["models"].get("qa_model", "gpt-5-mini"))
+    label_model_var = tk.StringVar(value=cfg["models"].get("label_model", "gpt-5-nano"))
     use_cache_var = tk.BooleanVar(value=True)
     limit_by_budget_var = tk.BooleanVar(value=True)
+    status_var = tk.StringVar(value="Bereit")
 
-    # Layout
-    root.columnconfigure(0, weight=0)
-    root.columnconfigure(1, weight=1)
-    root.rowconfigure(0, weight=1)
+    # ===== Layout =====
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(1, weight=1)
 
-    left = ttk.Frame(root, padding=12)
-    left.grid(row=0, column=0, sticky="ns")
-    right = ttk.Frame(root, padding=12)
-    right.grid(row=0, column=1, sticky="nsew")
+    # Toolbar
+    toolbar = tb.Frame(root, padding=8)
+    toolbar.grid(row=0, column=0, sticky="ew")
+    toolbar.columnconfigure(99, weight=1)
+    btn_open = tb.Button(toolbar, text="Datei öffnen", bootstyle="secondary")
+    btn_est = tb.Button(toolbar, text="Schätzung", bootstyle="info")
+    btn_start = tb.Button(toolbar, text="Start", bootstyle="primary")
+    btn_abort = tb.Button(toolbar, text="Abbrechen", bootstyle="danger-outline")
+    btn_open.grid(row=0, column=0, padx=4)
+    btn_est.grid(row=0, column=1, padx=4)
+    btn_start.grid(row=0, column=2, padx=4)
+    btn_abort.grid(row=0, column=3, padx=4)
 
-    # LEFT: controls
-    ttk.Label(left, text="1) Skript wählen (PDF/TXT)").grid(sticky="w")
-    path_row = ttk.Frame(left)
-    path_row.grid(sticky="ew", pady=(2,10))
-    path_entry = ttk.Entry(path_row, textvariable=file_path_var, width=40)
-    path_entry.grid(row=0, column=0, sticky="w")
-    def choose_file():
-        p = filedialog.askopenfilename(filetypes=[("PDF/TXT","*.pdf *.txt"), ("Alle","*.*")])
+    # Center PanedWindow
+    center = tb.Panedwindow(root, orient="horizontal")
+    center.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+    left = tb.Labelframe(center, text="Quelle & Einstellungen", padding=10)
+    right = tb.Notebook(center)
+    center.add(left, weight=1, minsize=320)
+    center.add(right, weight=3, minsize=480)
+
+    for c in range(2):
+        left.columnconfigure(c, weight=1)
+
+    # Left inputs
+    row = 0
+    tb.Label(left, text="Datei").grid(row=row, column=0, sticky="w")
+    path_row = tb.Frame(left)
+    path_row.grid(row=row, column=1, sticky="ew", pady=(0,6))
+    path_row.columnconfigure(0, weight=1)
+    tb.Entry(path_row, textvariable=file_path_var).grid(row=0, column=0, sticky="ew")
+    btn_browse = tb.Button(path_row, text="…")
+    btn_browse.grid(row=0, column=1, padx=4)
+    row += 1
+
+    tb.Label(left, text="API‑Key").grid(row=row, column=0, sticky="w")
+    tb.Entry(left, textvariable=api_key_var, show="•").grid(row=row, column=1, sticky="ew", pady=(0,6))
+    row += 1
+
+    tb.Label(left, text="Label‑Modell").grid(row=row, column=0, sticky="w")
+    tb.Combobox(left, textvariable=label_model_var, values=["gpt-5-nano","gpt-5-mini","gpt-5"]).grid(row=row, column=1, sticky="ew")
+    row += 1
+
+    tb.Label(left, text="QA‑Modell").grid(row=row, column=0, sticky="w")
+    tb.Combobox(left, textvariable=model_var, values=["gpt-5-mini","gpt-5"]).grid(row=row, column=1, sticky="ew", pady=(0,6))
+    row += 1
+
+    tb.Label(left, text="Gründlichkeit").grid(row=row, column=0, sticky="w")
+    slider = tb.Scale(left, from_=4, to=16, value=thorough_var.get(), bootstyle="info")
+    slider.grid(row=row, column=1, sticky="ew")
+    def _slider(v):
+        thorough_var.set(int(float(v)))
+    slider.configure(command=_slider)
+    row += 1
+    tb.Label(left, textvariable=thorough_var).grid(row=row, column=1, sticky="w")
+    row += 1
+
+    tb.Label(left, text="Budget (USD)").grid(row=row, column=0, sticky="w")
+    tb.Spinbox(left, from_=0.0, to=100.0, increment=0.5, textvariable=budget_var).grid(row=row, column=1, sticky="ew", pady=(0,6))
+    row += 1
+
+    tb.Checkbutton(left, text="Autom. herunterskalieren", variable=limit_by_budget_var).grid(row=row, column=1, sticky="w")
+    row += 1
+
+    tb.Label(left, text="Ausgabeordner").grid(row=row, column=0, sticky="w")
+    out_row = tb.Frame(left)
+    out_row.grid(row=row, column=1, sticky="ew", pady=(0,6))
+    out_row.columnconfigure(0, weight=1)
+    tb.Entry(out_row, textvariable=out_dir_var).grid(row=0, column=0, sticky="ew")
+    btn_out = tb.Button(out_row, text="…")
+    btn_out.grid(row=0, column=1, padx=4)
+    row += 1
+
+    tb.Checkbutton(left, text="Cache verwenden", variable=use_cache_var).grid(row=row, column=1, sticky="w")
+    row += 1
+
+    # Tabs on right
+    tab_preview = tb.Frame(right, padding=8)
+    tab_log = tb.Frame(right, padding=0)
+    tab_export = tb.Frame(right, padding=8)
+    right.add(tab_preview, text="Vorschau")
+    right.add(tab_log, text="Log")
+    right.add(tab_export, text="Export")
+
+    log_widget = ScrolledText(tab_log, height=12, wrap="word")
+    log_widget.pack(fill="both", expand=True)
+
+    # Status bar
+    status = tb.Frame(root, padding=(10,6))
+    status.grid(row=2, column=0, sticky="ew")
+    status.columnconfigure(0, weight=1)
+    tb.Label(status, textvariable=status_var).grid(row=0, column=0, sticky="w")
+    progress = tb.Progressbar(status, mode="determinate", maximum=100, bootstyle="info-striped")
+    progress.grid(row=0, column=1, sticky="e", padx=6)
+
+    # ===== Functions =====
+    def log(msg: str) -> None:
+        log_widget.insert("end", msg + "\n")
+        log_widget.see("end")
+        if int(log_widget.index('end-1c').split('.')[0]) > LOG_MAX_LINES:
+            log_widget.delete("1.0", "2.0")
+
+    def choose_file() -> None:
+        p = filedialog.askopenfilename(filetypes=[("PDF/TXT","*.pdf *.txt"), ("Alle Dateien","*.*")])
         if p:
             file_path_var.set(p)
-    ttk.Button(path_row, text="Durchsuchen …", command=choose_file).grid(row=0, column=1, padx=6)
 
-    ttk.Separator(left).grid(sticky="ew", pady=6)
-    ttk.Label(left, text="2) API‑Key (nur für diese Sitzung)").grid(sticky="w")
-    ttk.Entry(left, textvariable=api_key_var, width=40, show="•").grid(sticky="w")
-    ttk.Label(left, text="⚠ sensibler Schlüssel – nicht speichern", foreground="red").grid(sticky="w")
-
-    ttk.Separator(left).grid(sticky="ew", pady=6)
-    ttk.Label(left, text="3) Modelle").grid(sticky="w")
-    ttk.Label(left, text="Label‑Modell (Nano)").grid(sticky="w")
-    ttk.Combobox(left, textvariable=label_model_var, values=["gpt-5-nano","gpt-5-mini","gpt-5"], width=20).grid(sticky="w")
-    ttk.Label(left, text="QA‑Modell").grid(sticky="w", pady=(6,0))
-    ttk.Combobox(left, textvariable=model_var, values=["gpt-5-mini","gpt-5"], width=20).grid(sticky="w")
-
-    ttk.Separator(left).grid(sticky="ew", pady=6)
-    ttk.Label(left, text="4) Gründlichkeit (Fragen/Chunk)").grid(sticky="w")
-    slider = ttk.Scale(left, from_=4, to=16, orient="horizontal", command=lambda v: thorough_var.set(int(float(v))))
-    slider.set(thorough_var.get())
-    slider.grid(sticky="ew")
-    lbl_val = ttk.Label(left, textvariable=thorough_var)
-    lbl_val.grid(sticky="w")
-
-    ttk.Separator(left).grid(sticky="ew", pady=6)
-    ttk.Label(left, text="5) Budgetlimit (USD)").grid(sticky="w")
-    ttk.Entry(left, textvariable=budget_var, width=10).grid(sticky="w")
-    ttk.Checkbutton(left, text="Bei Bedarf automatisch herunterskalieren", variable=limit_by_budget_var).grid(sticky="w")
-
-    ttk.Separator(left).grid(sticky="ew", pady=6)
-    ttk.Label(left, text="6) Ausgabeordner").grid(sticky="w")
-    out_row = ttk.Frame(left)
-    out_row.grid(sticky="ew", pady=(2,10))
-    ttk.Entry(out_row, textvariable=out_dir_var, width=40).grid(row=0, column=0, sticky="w")
-    def choose_out():
+    def choose_out() -> None:
         p = filedialog.askdirectory()
-        if p: out_dir_var.set(p)
-    ttk.Button(out_row, text="Wählen …", command=choose_out).grid(row=0, column=1, padx=6)
+        if p:
+            out_dir_var.set(p)
 
-    ttk.Checkbutton(left, text="Cache verwenden", variable=use_cache_var).grid(sticky="w")
-
-    btn_row = ttk.Frame(left)
-    btn_row.grid(sticky="ew", pady=(12,0))
-    progress = ttk.Progressbar(left, length=240, mode="determinate")
-    progress.grid(sticky="ew", pady=(6,0))
-    status_var = tk.StringVar(value="")
-    ttk.Label(left, textvariable=status_var).grid(sticky="w")
-
-    # RIGHT: log and actions
-    ttk.Label(right, text="Log / Schätzung / Ergebnis").grid(sticky="w")
-    text = tk.Text(right, height=30)
-    text.grid(sticky="nsew")
-    right.rowconfigure(1, weight=1)
-
-    def log(msg):
-        text.insert("end", msg + "\n")
-        text.see("end")
-        # truncate
-        if int(text.index('end-1c').split('.')[0]) > LOG_MAX_LINES:
-            text.delete("1.0", "2.0")
-
-    # Estimation
-    def estimate():
+    def estimate() -> None:
         p = file_path_var.get().strip()
         if not p:
             messagebox.showerror("Fehler", "Bitte zunächst eine Datei wählen.")
@@ -146,7 +185,7 @@ def run_gui():
         log(f"[SCHÄTZUNG] Tokens_in={est['in_tokens']:,} | Tokens_out≈{est['out_tokens']:,} | Chunks={est['chunks']}")
         log(f"  Label‑Kosten (Nano)≈ ${est['cost_label_usd']:.4f}  | QA‑Kosten ({model})≈ ${est['cost_qa_usd']:.4f}  | Gesamt≈ ${est['total_cost_usd']:.4f}")
 
-    def start():
+    def start() -> None:
         p = file_path_var.get().strip()
         if not p:
             messagebox.showerror("Fehler", "Bitte Datei wählen.")
@@ -181,12 +220,17 @@ def run_gui():
                 messagebox.showerror("Fehler", f"{ex.__class__.__name__}: {ex}")
         threading.Thread(target=worker, daemon=True).start()
 
-    ttk.Button(btn_row, text="Schätzung", command=estimate).grid(row=0, column=0, padx=4)
-    ttk.Button(btn_row, text="Start", command=start).grid(row=0, column=1, padx=4)
-
-    def on_close():
+    def on_close() -> None:
         api_key_var.set("")
         root.destroy()
+
+    # Button commands
+    btn_open.configure(command=choose_file)
+    btn_browse.configure(command=choose_file)
+    btn_out.configure(command=choose_out)
+    btn_est.configure(command=estimate)
+    btn_start.configure(command=start)
+    btn_abort.configure(command=on_close)
 
     if source in {"config", "file"}:
         messagebox.showwarning(
@@ -195,5 +239,4 @@ def run_gui():
         )
 
     root.protocol("WM_DELETE_WINDOW", on_close)
-
     root.mainloop()
