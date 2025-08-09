@@ -1,4 +1,11 @@
-# app/pdf_ingest.py
+"""Extraktion und grobe Segmentierung von PDF-Dateien.
+
+`extract_text_from_pdf` versucht zunächst ``pdfplumber`` zu verwenden und fällt
+bei fehlender Installation auf ``pypdf`` zurück. Die Funktion `segment_text`
+nimmt die Rohtexte entgegen und zerlegt sie in Abschnitte, bevor das feinere
+Chunking (`app.chunking`) angewendet wird.
+"""
+
 from __future__ import annotations
 import re
 from typing import List, Tuple, Iterable, Optional

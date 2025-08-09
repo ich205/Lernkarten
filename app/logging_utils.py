@@ -1,3 +1,9 @@
+"""Einfache Logger-Konfiguration.
+
+Stellt `get_logger` bereit, das sowohl in der GUI als auch in Skripten für eine
+einheitliche Log-Ausgabe sorgt. Die Logdateien liegen im Unterordner ``.logs``.
+"""
+
 import logging, pathlib, datetime
 
 def get_logger(name="gsa"):

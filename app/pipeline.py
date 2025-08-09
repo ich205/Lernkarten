@@ -1,4 +1,11 @@
-# app/pipeline.py
+"""Zentrale Verarbeitungslogik für PDFs → Lernkarten.
+
+Die `LernkartenPipeline` verbindet alle Einzelmodule: PDF-Einlesung,
+Segmentierung, Klassifikation, Frage-Antwort-Erzeugung und Export. Viele
+Standardwerte stammen aus ``config.toml`` und werden beim Erstellen der
+`OpenAISettings` übergeben.
+"""
+
 from __future__ import annotations
 from typing import List, Dict, Any, Tuple, Callable, Optional
 from dataclasses import dataclass
@@ -27,6 +34,12 @@ class LernkartenPipeline:
         self.tok = Tokenizer()
 
     def load_and_segment(self, path: str) -> List[Segment]:
+        """Liest eine PDF ein und segmentiert sie in grobe Abschnitte.
+
+        Die feine Chunking-Logik (`app.chunking`) wird später angewendet; hier
+        erfolgt nur eine heuristische Absatz-Zerlegung über `pdf_ingest.segment_text`.
+        """
+
         raw = extract_text_from_pdf(path)
         chunks = segment_text(raw)
         return [Segment(text=c) for c in chunks]

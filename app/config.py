@@ -1,4 +1,10 @@
-# app/config.py
+"""Hilfsfunktionen zum Laden der zentralen Konfigurationsdatei.
+
+Das Modul kapselt den Zugriff auf ``config.toml`` und stellt Standardwerte für
+Modelle, Preise und Heuristiken bereit. `load_config` wird u.a. von
+`app.pipeline`, `app.openai_client` und der GUI verwendet, um Einstellungen wie
+Modelle, Sprache oder Chunking-Parameter zu beziehen.
+"""
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict

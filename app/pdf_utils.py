@@ -1,3 +1,9 @@
+"""Low-level PDF-Helfer.
+
+Dieses Modul wird von `pdf_ingest` und der GUI genutzt, um Text aus PDF-Dateien
+oder alternativen Quellen zu extrahieren und grob zu bereinigen.
+"""
+
 from pypdf import PdfReader
 import re, os, pathlib
 

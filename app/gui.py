@@ -1,3 +1,12 @@
+"""Tkinter-basierte Desktop-Oberfläche.
+
+Die GUI verbindet Benutzerinteraktionen mit der Pipeline. Viele
+Standardwerte (z. B. Startsprache, Fragen pro Chunk) stammen aus
+``config.toml`` und werden über `load_config` eingelesen. Sie ruft
+`pipeline.Pipeline` auf, um PDFs einzulesen, OpenAI anzusprechen und die
+Ergebnisse zu exportieren.
+"""
+
 import os
 import threading
 import queue
