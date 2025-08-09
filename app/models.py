@@ -9,7 +9,6 @@ Pipeline-Abstraktion nötig ist.
 import os, time, hashlib, json, math
 from typing import Dict, Any
 
-import requests
 
 def _get_openai_client():
     # Import on demand to avoid hard dependency at import time
@@ -33,7 +32,7 @@ def count_tokens_rough(text: str) -> int:
         import tiktoken
         enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(text))
-    except (ImportError, ValueError, requests.exceptions.RequestException):
+    except Exception:
         return max(1, math.ceil(len(text) / 4))
 
 def call_json_chat(model: str, system_prompt: str, user_prompt: str, temperature: float = 0.1, max_output_tokens: int = 600) -> Dict[str, Any]:

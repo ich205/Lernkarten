@@ -8,8 +8,6 @@ Textabschnitten abzuschätzen.
 from __future__ import annotations
 from typing import Iterable, Optional
 
-import requests
-
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -34,10 +32,10 @@ class Tokenizer:
             # o200k_base abwaerts-kompatibel; faellt auf cl100k_base zurueck
             try:
                 self._enc = tiktoken.get_encoding(encoding_name)
-            except (KeyError, requests.exceptions.RequestException):
+            except Exception:
                 try:
                     self._enc = tiktoken.get_encoding("cl100k_base")
-                except (KeyError, requests.exceptions.RequestException):
+                except Exception:
                     self._enc = None
         except ImportError:
             self._enc = None
