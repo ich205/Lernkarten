@@ -8,34 +8,46 @@ liefert.
 from __future__ import annotations
 from typing import List, Dict, Any
 from pathlib import Path
+try:
+    import pandas as pd  # optional
+except Exception:  # ImportError + env specifics
+    pd = None
 
 def to_excel(rows: List[Dict[str, Any]], out_path: str) -> None:
-    """Schreibt eine Liste von Karten in ``out_path``.
+    """Schreibt eine Liste von Karten in ``out_path``."""
 
-    ``rows`` ist eine Liste von Dictionaries wie sie `pipeline.generate_cards`
-    erzeugt. Die Funktion wandelt sie in ein pandas-DataFrame um und speichert
-    dieses als ``.xlsx``.
-    """
-
-    try:
-        import pandas as pd
-    except ImportError as exc:
-        raise RuntimeError(
-            "Das Paket 'pandas' wird zum Export in Excel-Dateien benötigt."
-        ) from exc
-
-    df = pd.DataFrame([
-        {
-            "Original": r.get("original",""),
-            "Fragen": "\n\n".join(r.get("fragen",[])),
-            "Antworten": "\n\n".join(r.get("antworten",[])),
-            "Labels": ", ".join(r.get("labels",[])),
-            "Hinweise": r.get("hinweise",""),
-        } for r in rows
-    ])
     path = Path(out_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        df.to_excel(path, index=False)
-    except OSError as exc:
-        raise RuntimeError(f"Could not write Excel file {path}: {exc}") from exc
+
+    if not rows:
+        # leere Datei anlegen, aber nicht craschen
+        path.touch()
+        return
+
+    data = [
+        {
+            "Original": r.get("original", ""),
+            "Frage": q,
+            "Antwort": a,
+            "Labels": ", ".join(r.get("labels", [])),
+            "Quelle": r.get("source", ""),
+        }
+        for r in rows
+        for q, a in zip(r.get("fragen", []), r.get("antworten", []))
+    ]
+
+    if pd is not None:
+        try:
+            pd.DataFrame(data).to_excel(path, index=False)
+        except OSError as exc:
+            raise RuntimeError(f"Could not write Excel file {path}: {exc}") from exc
+    else:
+        # Fallback: CSV erzeugen, gleiche Basename
+        import csv
+        csv_path = path.with_suffix(".csv")
+        with csv_path.open("w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(
+                f, fieldnames=["Original", "Frage", "Antwort", "Labels", "Quelle"]
+            )
+            w.writeheader()
+            w.writerows(data)

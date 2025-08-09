@@ -94,11 +94,9 @@ Schätzt Kosten, indem `chunking.split_into_chunks` und
 `config.toml` geladen; Änderungen an Modellpreisen oder Schätzparametern
 können dort erfolgen【F:app/cost.py†L1-L24】.
 
-### `app/excel_export.py` und `app/export.py`
-`excel_export.to_excel` exportiert generierte Karten in eine einfache
-Excel‑Datei【F:app/excel_export.py†L1-L17】. `export.export_to_excel`
-erzeugt zusätzlich CSV und Metadaten und kann als Vorlage für komplexere
-Exporte dienen【F:app/export.py†L1-L20】.
+### `app/excel_export.py`
+`excel_export.to_excel` exportiert generierte Karten in eine Excel-Datei.
+Fehlt `pandas`, wird stattdessen eine CSV-Datei erzeugt【F:app/excel_export.py†L1-L53】.
 
 ### `app/logging_utils.py`
 Stellt einen Logger bereit, der sowohl auf die Konsole als auch in eine
@@ -126,7 +124,7 @@ Kostenanalyse verwendet werden können.
   gepflegt. Für zusätzliche Modelle Preise ergänzen und ggf.
   `OpenAISettings` erweitern.
 - **Alternative Exporte**: Weitere Formate (z. B. Anki‑Decks) lassen
-  sich ähnlich wie `export.export_to_excel` implementieren.
+  sich ähnlich wie `excel_export.to_excel` implementieren.
 - **Zusätzliche Verarbeitung**: Vor oder nach der Frage‑Generierung
   können Funktionen eingefügt werden, z. B. zur Qualitätskontrolle oder
   zum Entfernen redundanter Karten.
