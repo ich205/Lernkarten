@@ -7,3 +7,8 @@ Lernkarten.zip
 start.sh
 start.bat
 start.py
+.coverage
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
