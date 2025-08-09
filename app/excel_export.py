@@ -6,7 +6,6 @@ liefert.
 """
 
 from __future__ import annotations
-import pandas as pd
 from typing import List, Dict, Any
 
 def to_excel(rows: List[Dict[str, Any]], out_path: str) -> None:
@@ -16,6 +15,13 @@ def to_excel(rows: List[Dict[str, Any]], out_path: str) -> None:
     erzeugt. Die Funktion wandelt sie in ein pandas-DataFrame um und speichert
     dieses als ``.xlsx``.
     """
+
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        raise RuntimeError(
+            "Das Paket 'pandas' wird zum Export in Excel-Dateien benötigt."
+        ) from exc
 
     df = pd.DataFrame([
         {
