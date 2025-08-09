@@ -55,3 +55,25 @@ def test_generate_cards_reports_all_segments(monkeypatch):
 
     assert [c[0] for c in calls] == [1, 2, 3]
     assert len(calls) == len(segments)
+
+
+def test_generate_cards_skips_empty_items(monkeypatch):
+    settings = OpenAISettings(api_key="test")
+    pipeline = LernkartenPipeline(settings)
+
+    monkeypatch.setattr(pipeline.tok, "count", lambda text: 100)
+    monkeypatch.setattr(
+        pipeline.client,
+        "gen_qa_for_chunk",
+        lambda text, n_questions, language: [],
+    )
+
+    segments = [Segment("eins")]
+
+    rows = pipeline.generate_cards(
+        segments,
+        max_questions_per_chunk=2,
+        language="de",
+    )
+
+    assert rows == []
