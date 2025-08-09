@@ -148,6 +148,22 @@ class App:
         self.progress_bar.grid(row=10, column=0, columnspan=3, sticky=(E,W), pady=(5,0))
         ttk.Label(frm, textvariable=self.progress).grid(row=11, column=0, columnspan=3, sticky=(W))
 
+        # Row 12+: Vorschau der aktuellen Karte
+        ttk.Label(frm, text="Originaltext:").grid(row=12, column=0, sticky=W, pady=(8,0))
+        self.preview_orig = Text(frm, height=3, wrap="word")
+        self.preview_orig.grid(row=13, column=0, columnspan=3, sticky=(E,W))
+        self.preview_orig.configure(state="disabled")
+
+        ttk.Label(frm, text="Frage:").grid(row=14, column=0, sticky=W, pady=(4,0))
+        self.preview_frage = Text(frm, height=2, wrap="word")
+        self.preview_frage.grid(row=15, column=0, columnspan=3, sticky=(E,W))
+        self.preview_frage.configure(state="disabled")
+
+        ttk.Label(frm, text="Antwort:").grid(row=16, column=0, sticky=W, pady=(4,0))
+        self.preview_antwort = Text(frm, height=2, wrap="word")
+        self.preview_antwort.grid(row=17, column=0, columnspan=3, sticky=(E,W))
+        self.preview_antwort.configure(state="disabled")
+
     def on_scale(self, val):
         try:
             self.questions_per_chunk.set(int(float(val)))
@@ -166,6 +182,20 @@ class App:
     def logln(self, msg):
         self.log.insert(END, msg + "\n")
         self.log.see(END)
+
+    def update_preview(self, original: str, frage: str, antwort: str):
+        snippet = original.strip()
+        if len(snippet) > 200:
+            snippet = snippet[:200] + "…"
+        for widget, content in (
+            (self.preview_orig, snippet),
+            (self.preview_frage, frage),
+            (self.preview_antwort, antwort),
+        ):
+            widget.configure(state="normal")
+            widget.delete("1.0", END)
+            widget.insert(END, content)
+            widget.configure(state="disabled")
 
     def segment_and_estimate(self):
         path = self.file_path.get().strip()
@@ -310,6 +340,9 @@ class App:
                     f"Segment {i}/{total} (Seite ~{page}) – Karten {card_count}"
                 )
 
+            def card_cb(orig, frage, antwort):
+                self.update_preview(orig, frage, antwort)
+
             rows = pipe.generate_cards(
                 filtered,
                 self.questions_per_chunk.get(),
@@ -317,6 +350,7 @@ class App:
                 progress_cb=gen_cb,
                 stop_cb=lambda: self._stop_flag,
                 pause_event=self._pause_event,
+                card_cb=card_cb,
             )
 
             # Export

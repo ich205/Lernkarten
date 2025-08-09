@@ -75,6 +75,7 @@ class LernkartenPipeline:
         progress_cb: Optional[Callable[[int, int, int], None]] = None,
         stop_cb: Optional[Callable[[], bool]] = None,
         pause_event: Any | None = None,
+        card_cb: Optional[Callable[[str, str, str], None]] = None,
     ) -> List[Dict[str, Any]]:
         """Generiert Lernkarten dynamisch je nach Segmentlänge."""
         rows: List[Dict[str, Any]] = []
@@ -98,12 +99,19 @@ class LernkartenPipeline:
                 if progress_cb:
                     progress_cb(i, total, card_count)
                 continue
+            fragen = []
+            antworten = []
+            for x in items:
+                fragen.append(x["frage"])
+                antworten.append(x["antwort"])
+                if card_cb:
+                    card_cb(s.text, x["frage"], x["antwort"])
             card_count += len(items)
             rows.append(
                 {
                     "original": s.text,
-                    "fragen": [x["frage"] for x in items],
-                    "antworten": [x["antwort"] for x in items],
+                    "fragen": fragen,
+                    "antworten": antworten,
                     "labels": [s.label] if s.label else [],
                     "hinweise": "",
                 }
