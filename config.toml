@@ -11,6 +11,9 @@ label_model = "gpt-4o-mini"       # für Segment-Klassifikation in `pipeline.cla
 qa_model    = "gpt-4o"            # Modell für QA-Generierung; "o4-mini" ist eine schnellere Alternative
 use_json_mode = true               # steuert JSON-Modus in `openai_client`; nötig für strukturierte Antworten
 max_parallel_requests = 3          # maximale gleichzeitige API-Aufrufe in `openai_client`
+request_timeout_sec = 60           # harte Obergrenze je API-Call
+base_backoff_seconds = 1.0         # Startwert für exponentielles Backoff bei 429/5xx
+max_retries = 5                    # maximale Wiederholungen bei transienten Fehlern
 
 [chunking]
 # Steuergrößen für die Textsegmentierung in `app.chunking.split_into_chunks`.
