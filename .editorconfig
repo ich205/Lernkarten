@@ -1,0 +1,22 @@
+# EditorConfig hilft, versehentliche BOMs und falsche Encodings zu vermeiden.
+# Viele Editoren (VS Code, Notepad++, IntelliJ etc.) respektieren diese Datei.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+
+[*.toml]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+
+[*.bat]
+end_of_line = crlf
+indent_style = tab

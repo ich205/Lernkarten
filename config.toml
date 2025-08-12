@@ -1,56 +1,32 @@
-"""
-Zentrale Anwendungskonfiguration. Sämtliche Einstellungen werden beim Start
-über `app.config.load_config` eingelesen und anschließend an die jeweiligen
-Module weitergereicht. Jede Option ist daher mit einem Hinweis versehen, wo sie
-im Code verwendet wird und welche Alternativen möglich sind.
-"""
+#
+# GSA Lernkarten – Konfiguration
+# Hinweis:
+#  - UTF-8 ohne BOM speichern
+#  - Strings in "Anführungszeichen"
+#  - Dezimalpunkt statt Komma
+#  - Diese Datei überschreibt interne Defaults
+#
 
 [auth]
-# Optionale API-Key-Quelle. Klartextspeicherung ist riskant!
-# api_key = "sk-..."
-# api_key_file = "pfad/zur/api_key.txt"
+# Leer lassen, wenn der Key in der GUI gesetzt wird – sonst hier eintragen.
+# Beispiel: api_key = "sk-..."
+api_key = ""
 
 [models]
-# IDs der zu verwendenden OpenAI‑Modelle. Sie werden in `app.openai_client`
-# gelesen und bestimmen, welche Endpunkte für Klassifikation und Fragenantworten
-# angesprochen werden.
-label_model = "gpt-5-nano"          # für Segment-Klassifikation in `pipeline.classify`
-qa_model    = "gpt-5-mini"          # Modell für QA-Generierung; "gpt-5" liefert höhere Qualität
-use_json_mode = true                # steuert JSON-Modus in `openai_client`; nötig für strukturierte Antworten
-max_parallel_requests = 3           # maximale gleichzeitige API-Aufrufe in `openai_client`
+# Wähle hier die real verfügbaren Modell-IDs deines Accounts.
+# Du möchtest nicht auf GPT-4 zurückfallen, daher reine GPT-5-Familie:
+#  - main: großes Standardmodell
+#  - mini: schneller & günstiger
+#  - nano: sehr günstig / leichte Tasks
+main = "gpt-5"
+mini = "gpt-5-mini"
+nano = "gpt-5-nano"
 
-[chunking]
-# Steuergrößen für die Textsegmentierung in `app.chunking.split_into_chunks`.
-# Anpassungen wirken sich direkt auf die Größe der an OpenAI gesendeten Textstücke aus.
-target_tokens = 600          # Zielanzahl Tokens pro Chunk; größer = weniger, aber längere API-Calls
-overlap_tokens = 60          # Anzahl Tokens Überlappung zwischen Chunks; erhöht Kontext bei QA
-max_chars_per_chunk = 4000   # harte Obergrenze pro Chunk, falls Token-Schätzer fehlt
-
-[prompting]
-# Vorgaben für die Fragenerzeugung in `pipeline.generate_cards` und
-# `openai_client.gen_qa_for_chunk`.
-language = "de"              # Sprache der Fragen/Antworten, z.B. "de", "en" oder "fr"
-tone = "sachlich, prüfungsorientiert, präzise"  # zusätzlicher Tonfall für die System-Prompts
-max_questions_per_chunk_default = 8  # Begrenzung, wird von der GUI als Startwert gelesen
-
-[costs]
-# Preisangaben (USD pro 1 Mio Tokens) für die Kostenschätzung in
-# `pipeline.estimate_cost`. Werte können bei neuen Modellen angepasst werden.
-# GPT-5
-gpt-5_input_usd_per_mtok = 1250.0
-gpt-5_cached_input_usd_per_mtok = 0.125
-gpt-5_output_usd_per_mtok = 10000.0
-
-# GPT-5 Mini
-gpt-5-mini_input_usd_per_mtok = 250.0
-gpt-5-mini_cached_input_usd_per_mtok = 0.025
-gpt-5-mini_output_usd_per_mtok = 2000.0
-
-# GPT-5 Nano
-gpt-5-nano_input_usd_per_mtok = 50.0
-gpt-5-nano_cached_input_usd_per_mtok = 0.005
-gpt-5-nano_output_usd_per_mtok = 400.0
+# Optional: weitere Feature-Flags (falls im Code ausgewertet)
+#thinking = true
+#temperature = 0.2
 
 [ui]
-# Darstellungsthema für die Tkinter-Oberfläche in `app.gui`.
-theme = "auto"    # "auto" | "light" | "dark"
+# Oberflächenbezogene Defaults (falls genutzt)
+theme = "auto"     # "light" | "dark" | "auto"
+language = "de"    # "de" | "en"
