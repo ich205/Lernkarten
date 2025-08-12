@@ -27,7 +27,7 @@ und CSV (z. B. für Anki).
    ```
 3. Starten:
  - Windows: `run.bat`
-  - macOS/Linux: `bash run.sh`
+  - macOS/Linux: `chmod +x run.sh && ./run.sh`
 4. In der GUI: **Skript wählen**, **API‑Key eingeben**, **Gründlichkeit** & **Budget** setzen, **Schätzen** → **Start**.
 
 ### API‑Schlüssel bereitstellen
@@ -44,6 +44,16 @@ Alternativen:
 > **Warnung:** Das Ablegen des Schlüssels in Textdateien oder `config.toml`
 > ist unsicher. Die Anwendung gibt beim Start eine Warnung aus, wenn solche
 > Quellen genutzt werden.
+
+### Voraussetzungen
+- Empfohlen: Python 3.10–3.12 und eine virtuelle Umgebung  
+  `python -m venv .venv && source .venv/bin/activate`  
+  *(Windows: `.venv\Scripts\activate`)*
+
+### Troubleshooting
+* **`ModuleNotFoundError`**: venv aktivieren und `pip install -r installer/requirements.txt` ausführen.
+* **`Permission denied` bei `run.sh`**: `chmod +x run.sh`.
+* **API‑Key in Dateien**: Bitte nicht in `config.toml` ablegen – stattdessen `.env` oder die GUI nutzen.
 
 ## Ordnerstruktur
 
@@ -62,7 +72,7 @@ Alternativen:
 
 ## Modelle & Preise
 Die Preise stammen aus Ihrer Vorgabe und sind in `config.toml` hinterlegt. Falls Ihr Account / Ihr Modell andere Preise hat, passen Sie sie bitte dort an. Die Kostenschätzung basiert auf
-geschätzten Eingabe‑/Ausgabe‑Tokens und differenziert zwischen *Eingabe*, *Zwischengespeicherte Eingabe* und *Ausgabe*. Für die meisten Workloads wird *Eingabe*+*Ausgabe* angesetzt.
+geschätzten Eingabe‑/Ausgabe‑Tokens und differenziert zwischen *Eingabe*, *zwischengespeicherter Eingabe* und *Ausgabe*. Für die meisten Workloads wird *Eingabe*+*Ausgabe* angesetzt.
 
 ## Bekannte Grenzen / Tipps
 - PDF‑Textextraktion ist nie perfekt. Nutzen Sie einen klaren Export (TXT) wenn möglich.
