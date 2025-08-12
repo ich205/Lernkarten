@@ -1,23 +1,25 @@
 @echo off
-setlocal enabledelayedexpansion
-cd /d "%~dp0"
+setlocal
+REM Setup & Start (Windows)
 
-if not exist .venv (
-  py -3 -m venv .venv
-)
-call .venv\Scripts\activate.bat
+REM Python-Launcher wählen
+set "_PY=python"
+where %_PY% >nul 2>nul || set "_PY=py -3"
 
-python -m pip install --upgrade pip >NUL 2>&1
-if exist installer\requirements.txt (
-  pip install -r installer\requirements.txt
-)
-
-rem .env laden (einfacher Parser: KEY=VALUE, ohne Quotes)
-if exist ".env" (
-  for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
-    if not "%%a"=="" set "%%a=%%b"
+IF NOT EXIST .venv\Scripts\activate.bat (
+  echo [Setup] Virtuelle Umgebung nicht gefunden – fuehre Installation aus ...
+  %_PY% install.py
+  if errorlevel 1 (
+    echo [Fehler] Installation fehlgeschlagen.
+    pause
+    exit /b 1
   )
 )
 
-python -m app.main
+call .venv\Scripts\activate.bat || (
+  echo [Fehler] Konnte venv nicht aktivieren.
+  pause
+  exit /b 1
+)
 
+python -m app.main
