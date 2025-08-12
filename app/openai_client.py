@@ -88,7 +88,7 @@ class OpenAIClient:
                 from openai import OpenAI
             except ImportError as e:
                 raise RuntimeError(
-                    "Das 'openai'-Paket ist nicht installiert. Bitte fuehre install.bat aus."
+                    "Das 'openai'-Paket ist nicht installiert. Bitte 'python install.py' ausführen."
                 ) from e
             self._client = OpenAI(api_key=self.settings.api_key)
         return self._client
