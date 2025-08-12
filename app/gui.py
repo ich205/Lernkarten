@@ -49,8 +49,8 @@ def run_gui():
     out_dir_var = tk.StringVar(value=os.path.abspath("."))
     thorough_var = tk.IntVar(value=int(cfg["prompting"].get("max_questions_per_chunk_default", 8)))
     budget_var = tk.DoubleVar(value=2.0)
-    model_var = tk.StringVar(value=cfg["models"].get("qa_model", "gpt-5-mini"))
-    label_model_var = tk.StringVar(value=cfg["models"].get("label_model", "gpt-5-nano"))
+    model_var = tk.StringVar(value=cfg["models"].get("qa_model", "gpt-4o"))
+    label_model_var = tk.StringVar(value=cfg["models"].get("label_model", "gpt-4o-mini"))
     use_cache_var = tk.BooleanVar(value=True)
     limit_by_budget_var = tk.BooleanVar(value=True)
     status_var = tk.StringVar(value="Bereit")
@@ -103,11 +103,11 @@ def run_gui():
     row += 1
 
     tb.Label(left, text="Label‑Modell").grid(row=row, column=0, sticky="w")
-    tb.Combobox(left, textvariable=label_model_var, values=["gpt-5-nano","gpt-5-mini","gpt-5"]).grid(row=row, column=1, sticky="ew")
+    tb.Combobox(left, textvariable=label_model_var, values=["o4-mini","gpt-4o-mini","gpt-4o"]).grid(row=row, column=1, sticky="ew")
     row += 1
 
     tb.Label(left, text="QA‑Modell").grid(row=row, column=0, sticky="w")
-    tb.Combobox(left, textvariable=model_var, values=["gpt-5-mini","gpt-5"]).grid(row=row, column=1, sticky="ew", pady=(0,6))
+    tb.Combobox(left, textvariable=model_var, values=["gpt-4o-mini","gpt-4o"]).grid(row=row, column=1, sticky="ew", pady=(0,6))
     row += 1
 
     tb.Label(left, text="Gründlichkeit").grid(row=row, column=0, sticky="w")

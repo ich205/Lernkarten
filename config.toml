@@ -1,10 +1,3 @@
-"""
-Zentrale Anwendungskonfiguration. Sämtliche Einstellungen werden beim Start
-über `app.config.load_config` eingelesen und anschließend an die jeweiligen
-Module weitergereicht. Jede Option ist daher mit einem Hinweis versehen, wo sie
-im Code verwendet wird und welche Alternativen möglich sind.
-"""
-
 [auth]
 # Optionale API-Key-Quelle. Klartextspeicherung ist riskant!
 # api_key = "sk-..."
@@ -14,10 +7,10 @@ im Code verwendet wird und welche Alternativen möglich sind.
 # IDs der zu verwendenden OpenAI‑Modelle. Sie werden in `app.openai_client`
 # gelesen und bestimmen, welche Endpunkte für Klassifikation und Fragenantworten
 # angesprochen werden.
-label_model = "gpt-5-nano"          # für Segment-Klassifikation in `pipeline.classify`
-qa_model    = "gpt-5-mini"          # Modell für QA-Generierung; "gpt-5" liefert höhere Qualität
-use_json_mode = true                # steuert JSON-Modus in `openai_client`; nötig für strukturierte Antworten
-max_parallel_requests = 3           # maximale gleichzeitige API-Aufrufe in `openai_client`
+label_model = "gpt-4o-mini"       # für Segment-Klassifikation in `pipeline.classify`
+qa_model    = "gpt-4o"            # Modell für QA-Generierung; "o4-mini" ist eine schnellere Alternative
+use_json_mode = true               # steuert JSON-Modus in `openai_client`; nötig für strukturierte Antworten
+max_parallel_requests = 3          # maximale gleichzeitige API-Aufrufe in `openai_client`
 
 [chunking]
 # Steuergrößen für die Textsegmentierung in `app.chunking.split_into_chunks`.
@@ -36,21 +29,23 @@ max_questions_per_chunk_default = 8  # Begrenzung, wird von der GUI als Startwer
 [costs]
 # Preisangaben (USD pro 1 Mio Tokens) für die Kostenschätzung in
 # `pipeline.estimate_cost`. Werte können bei neuen Modellen angepasst werden.
-# GPT-5
-gpt-5_input_usd_per_mtok = 1250.0
-gpt-5_cached_input_usd_per_mtok = 0.125
-gpt-5_output_usd_per_mtok = 10000.0
 
-# GPT-5 Mini
-gpt-5-mini_input_usd_per_mtok = 250.0
-gpt-5-mini_cached_input_usd_per_mtok = 0.025
-gpt-5-mini_output_usd_per_mtok = 2000.0
+# GPT-4o
+gpt-4o_input_usd_per_mtok = 5.0
+gpt-4o_cached_input_usd_per_mtok = 0.5
+gpt-4o_output_usd_per_mtok = 15.0
 
-# GPT-5 Nano
-gpt-5-nano_input_usd_per_mtok = 50.0
-gpt-5-nano_cached_input_usd_per_mtok = 0.005
-gpt-5-nano_output_usd_per_mtok = 400.0
+# GPT-4o Mini
+gpt-4o-mini_input_usd_per_mtok = 0.15
+gpt-4o-mini_cached_input_usd_per_mtok = 0.015
+gpt-4o-mini_output_usd_per_mtok = 0.6
+
+# o4 Mini (Alternative für Klassifikation)
+o4-mini_input_usd_per_mtok = 2.0
+o4-mini_cached_input_usd_per_mtok = 0.2
+o4-mini_output_usd_per_mtok = 8.0
 
 [ui]
 # Darstellungsthema für die Tkinter-Oberfläche in `app.gui`.
 theme = "auto"    # "auto" | "light" | "dark"
+
