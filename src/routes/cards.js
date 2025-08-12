@@ -1,9 +1,9 @@
-const Card = require('../models/card');
 const logger = require('../logger');
+const { getAllCards } = require('../services/cardService');
 
 async function getCards(req, res) {
   try {
-    const cards = await Card.findAll();
+    const cards = await getAllCards();
     res.json(cards);
   } catch (error) {
     logger.error('Error fetching cards:', error);
