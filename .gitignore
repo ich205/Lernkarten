@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 output.xlsx
 node_modules/
+.env
 # Distribution artifacts
 Lernkarten.zip
 start.sh
