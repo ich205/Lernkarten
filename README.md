@@ -5,8 +5,8 @@ Segmentieren, automatischem Labeln (Fakten/Beispiele/Definitionen/Aufzählungen/
 Filtern von Überschriften/Vorwort, Erzeugen von Lernkarten/Fragen sowie Export in Excel
 und CSV (z. B. für Anki).
 
-> **Hinweis:** Die hier konfigurierten Modellnamen (`gpt-5`, `gpt-5-mini`, `gpt-5-nano`) sind **Platzhalter**.
-> Bitte passen Sie sie in `config.toml` an die tatsächlich verfügbaren OpenAI‑Modelle an.
+> **Hinweis:** Die in `config.toml` hinterlegten Modellnamen (`gpt-4o`, `gpt-4o-mini`, `o4-mini`) sind **Beispiele**.
+> Passen Sie sie bei Bedarf an die in Ihrem Account verfügbaren OpenAI‑Modelle an.
 
 ## Highlights
 - **GUI** mit Dateiauswahl, API‑Key‑Eingabe (ephemer), Budget‑Grenze, Gründlichkeits‑Slider (4/8/16 Fragen pro Segment), Fortschrittsbalken und Live‑Log.
@@ -29,6 +29,13 @@ und CSV (z. B. für Anki).
  - Windows: `run.bat`
   - macOS/Linux: `chmod +x run.sh && ./run.sh`
 4. In der GUI: **Skript wählen**, **API‑Key eingeben**, **Gründlichkeit** & **Budget** setzen, **Schätzen** → **Start**.
+
+## Quick-Checkliste
+
+- `config.toml` im UTF‑8‑Format (ohne BOM) anlegen; erste Zeile `[auth]`.
+- Modell‑IDs auf reale OpenAI‑Modelle setzen, z. B. `gpt-4o`, `gpt-4o-mini`, `o4-mini`.
+- `pdfplumber` installieren (für zuverlässige PDF‑Textextraktion).
+- Anwendung neu starten (`run.bat` oder `run.sh`).
 
 ### API‑Schlüssel bereitstellen
 
