@@ -7,67 +7,54 @@ werden von `pipeline.LernkartenPipeline` genutzt und greifen auf Werte aus
 """
 
 from __future__ import annotations
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
-from time import sleep
 import json
-import random
+import time
 
 from .pipeline_models import QAItem
 
-try:
+try:  # pragma: no cover - optional dependency
     from openai import OpenAIError
-except ImportError:  # pragma: no cover - optional dependency
+except ImportError:  # pragma: no cover
     OpenAIError = Exception  # type: ignore
 
-from .config import DEFAULT_CLASSIFY_MODEL, DEFAULT_QA_MODEL, DEFAULT_LANGUAGE
+from .config import (
+    DEFAULT_CLASSIFY_MODEL,
+    DEFAULT_QA_MODEL,
+    DEFAULT_LANGUAGE,
+    load_config,
+)
 from .logging_utils import get_logger
 
-logger = get_logger(__name__)
+_cfg = load_config()
+_REQ_TIMEOUT = int(_cfg["models"].get("request_timeout_sec", 60))
+_MAX_RETRIES = int(_cfg["models"].get("max_retries", 5))
+_BASE_BACKOFF = float(_cfg["models"].get("base_backoff_seconds", 1.0))
 
 
-def retry_request(func, *args, **kwargs):
-    """Führt *func* mit Wiederholungen und Exponential-Backoff aus.
+def _is_transient(e: Exception) -> bool:
+    code = getattr(e, "status_code", None)
+    return isinstance(e, OpenAIError) and code in (429, 500, 502, 503, 504)
 
-    Parameter:
-        func: Aufzurufende Funktion
-        *args: Positionsargumente für func
-        **kwargs: Keyword-Argumente für func. Zusätzliche optionale
-            Kontrollparameter:
-            - n: maximale Anzahl Versuche (Standard: 3)
-            - delay: Anfangspause zwischen den Versuchen in Sekunden
-              (Standard: 1). Zwischen den Versuchen wird ein vollständiger
-              Jitter (0 bis delay) verwendet, um gleichzeitige
-              Wiederholungen zu entzerren.
-            - backoff: Faktor, mit dem die Pause nach jedem Fehlschlag
-              multipliziert wird (Standard: 2)
-    """
 
-    max_attempts = kwargs.pop("n", 3)
-    delay = kwargs.pop("delay", 1)
-    backoff = kwargs.pop("backoff", 2)
+def safe_request(call: Callable[..., Any], *args, **kwargs):
+    """Wrap OpenAI client calls with timeout and exponential backoff."""
 
-    for attempt in range(1, max_attempts + 1):
+    kwargs.setdefault("timeout", _REQ_TIMEOUT)
+    for attempt in range(_MAX_RETRIES):
         try:
-            return func(*args, **kwargs)
-        except OpenAIError as exc:
-            if attempt == max_attempts:
-                logger.warning(
-                    "API request failed after %s attempts: %s", attempt, exc
-                )
-                raise RuntimeError(
-                    f"Request failed after {max_attempts} attempts"
-                ) from exc
-            logger.warning(
-                "API request failed (attempt %s/%s): %s – retrying in %ss",
-                attempt,
-                max_attempts,
-                exc,
-                delay,
-            )
-            sleep_time = random.uniform(0, delay)
-            sleep(sleep_time)
-            delay *= backoff
+            return call(*args, **kwargs)
+        except Exception as e:  # pragma: no cover - network errors hard to test
+            if _is_transient(e) and attempt < _MAX_RETRIES - 1:
+                retry_after = getattr(e, "retry_after", None)
+                sleep = float(retry_after or (_BASE_BACKOFF * (2**attempt)))
+                time.sleep(min(sleep, 30.0))
+                continue
+            raise
+
+
+logger = get_logger(__name__)
 
 @dataclass
 class OpenAISettings:
@@ -111,7 +98,7 @@ class OpenAIClient:
             "oder aehnliches handelt, setze keep=false. Sonst keep=true.\n\n"
             f"---\n{text}\n---"
         )
-        resp = retry_request(
+        resp = safe_request(
             client.chat.completions.create,
             model=self.settings.classify_model,
             temperature=0.0,
@@ -147,7 +134,7 @@ class OpenAIClient:
             "Antworten moeglichst kurz, klar und eindeutig.\n\n"
             f"=== TEXT BEGINN ===\n{text}\n=== TEXT ENDE ==="
         )
-        resp = retry_request(
+        resp = safe_request(
             client.chat.completions.create,
             model=self.settings.qa_model,
             temperature=self.settings.temperature,
