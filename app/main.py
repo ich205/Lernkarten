@@ -25,7 +25,10 @@ from ttkbootstrap.scrolled import ScrolledText
 from ttkbootstrap.toast import ToastNotification
 from app.theme import make_root, attach_theme_toggle
 from pypdf.errors import PdfReadError
-from openai import OpenAIError
+try:
+    from openai import OpenAIError
+except ImportError:  # pragma: no cover - fallback if openai not installed
+    OpenAIError = Exception
 
 from .config import (
     DEFAULT_CLASSIFY_MODEL,

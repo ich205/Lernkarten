@@ -17,7 +17,10 @@ from ttkbootstrap.tooltip import ToolTip
 from ttkbootstrap.toast import ToastNotification
 from ttkbootstrap.scrolled import ScrolledText
 
-from openai import OpenAIError
+try:
+    from openai import OpenAIError
+except ImportError:  # pragma: no cover - fallback if openai not installed
+    OpenAIError = Exception
 
 from .config import load_config, load_api_key
 from .pipeline import LernkartenPipeline
