@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Tuple, Callable, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
 from .tokenizer_utils import Tokenizer
 from .config import PRICES, ESTIMATE
 from .openai_client import OpenAIClient, OpenAISettings
@@ -49,16 +50,55 @@ class LernkartenPipeline:
     ) -> List[Segment]:
         """Klassifiziert Segmente und erlaubt Fortschritts-Callbacks sowie Stop/Pause."""
         out = []
+        self._dropped_segments = 0
+        bullet_pattern = r'^\s*[-*•0-9]+[\.\)]'
         total = len(segments)
         for i, s in enumerate(segments, 1):
             if stop_cb and stop_cb():
                 raise RuntimeError("Abgebrochen")
             if pause_event:
                 pause_event.wait()
-            data = self.client.classify_segment(s.text[:5000])  # Sicherheit
-            s.label = data.get("label", "Fakt")
-            s.keep = bool(data.get("keep", True))
-            out.append(s)
+            got_any = False
+            paragraphs = [p for p in s.text.split("\n\n") if p.strip()]
+            for para in paragraphs:
+                label_seq: List[Tuple[str, str]] = []
+                # Split paragraph into sentences (treat bullet list items as separate sentences)
+                if "\n" in para:
+                    lines = para.splitlines()
+                    nonempty = [ln for ln in lines if ln.strip()]
+                    if nonempty and all(re.match(bullet_pattern, ln) for ln in nonempty):
+                        sentences = [ln.strip() for ln in nonempty]
+                    else:
+                        para_text = para.replace("\n", " ")
+                        sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZÄÖÜ])', para_text)
+                else:
+                    sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZÄÖÜ])', para)
+                for sentence in [sent for sent in sentences if sent.strip()]:
+                    data = self.client.classify_segment(sentence[:5000])
+                    label = data.get("label", "Fakt")
+                    keep_flag = bool(data.get("keep", True))
+                    if not keep_flag:
+                        continue
+                    label_seq.append((label, sentence.strip()))
+                if not label_seq:
+                    continue
+                got_any = True
+                # Group consecutive sentences with the same label
+                current_label, current_text = label_seq[0]
+                for label, text_part in label_seq[1:]:
+                    if label == current_label:
+                        current_text += " " + text_part
+                    else:
+                        seg_new = Segment(text=current_text, keep=True)
+                        seg_new.label = current_label
+                        out.append(seg_new)
+                        current_label = label
+                        current_text = text_part
+                seg_new = Segment(text=current_text, keep=True)
+                seg_new.label = current_label
+                out.append(seg_new)
+            if not got_any:
+                self._dropped_segments += 1
             if progress_cb:
                 progress_cb(i, total)
         return out

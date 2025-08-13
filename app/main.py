@@ -220,6 +220,12 @@ class App:
             segs = segment_text(txt)
             # Wandelt jeden Textabschnitt in ein Segment-Objekt um:
             self._segments = [Segment(text=s) for s in segs]
+            # Save segments to a text file for reference
+            segments_path = os.path.join(os.path.dirname(__file__), "..", "segments.txt")
+            segments_path = os.path.abspath(segments_path)
+            with open(segments_path, "w", encoding="utf-8") as f:
+                for i, segment_text in enumerate(segs, start=1):
+                    f.write(f"Segment {i}:\n{segment_text}\n\n")
             try:
                 reader = PdfReader(path)
                 self._total_pages = len(reader.pages)
@@ -331,6 +337,13 @@ class App:
                 stop_cb=lambda: self._stop_flag,
                 pause_event=self._pause_event,
             )
+            # Save labeled text passages to a file for reference
+            labeled_path = os.path.join(os.path.dirname(__file__), "..", "labeled_passages.txt")
+            labeled_path = os.path.abspath(labeled_path)
+            with open(labeled_path, "w", encoding="utf-8") as f:
+                for i, s in enumerate(seg_objs, start=1):
+                    label = getattr(s, "label", "")
+                    f.write(f"[{label}] {s.text}\n\n")
 
             filtered = [s for s in seg_objs if s.keep]
             removed = len(seg_objs) - len(filtered)

@@ -35,6 +35,10 @@ _BASE_BACKOFF = float(_cfg["models"].get("base_backoff_seconds", 1.0))
 
 def _is_transient(e: Exception) -> bool:
     code = getattr(e, "status_code", None)
+    if isinstance(e, OpenAIError) and code == 429:
+        err_msg = str(e)
+        if "insufficient_quota" in err_msg or "exceeded your current quota" in err_msg:
+            return False
     return isinstance(e, OpenAIError) and code in (429, 500, 502, 503, 504)
 
 
