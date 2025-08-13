@@ -212,12 +212,14 @@ class App:
 
         try:
             from .pdf_ingest import extract_text_from_pdf, segment_text
+            from .pipeline_models import Segment
             from pypdf import PdfReader
 
             txt = extract_text_from_pdf(path)
             self._full_text = txt
             segs = segment_text(txt)
-            self._segments = segs
+            # Wandelt jeden Textabschnitt in ein Segment-Objekt um:
+            self._segments = [Segment(text=s) for s in segs]
             try:
                 reader = PdfReader(path)
                 self._total_pages = len(reader.pages)
@@ -245,7 +247,8 @@ class App:
             from .pipeline import LernkartenPipeline
             from .config import PRICES
             tok = Tokenizer()
-            seg_token_counts = [tok.count(s) for s in self._segments]
+            # Wenn self._segments Segment-Objekte enthält, .text zum Zählen verwenden:
+            seg_token_counts = [tok.count(s.text) for s in self._segments]
             seg_avg = int(sum(seg_token_counts)/max(1, len(seg_token_counts)))
             n_segments = len(self._segments)
             qpc = self.questions_per_chunk.get()
