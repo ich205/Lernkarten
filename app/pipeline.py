@@ -12,6 +12,13 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 from .tokenizer_utils import Tokenizer
+from .logging_utils import get_logger
+try:
+    from openai import OpenAIError  # type: ignore
+except Exception:  # pragma: no cover
+    OpenAIError = Exception  # type: ignore
+logger = get_logger(__name__)
+
 from .config import PRICES, ESTIMATE
 from .openai_client import OpenAIClient, OpenAISettings
 from .pdf_ingest import extract_text_from_pdf, segment_text
@@ -74,7 +81,27 @@ class LernkartenPipeline:
                 else:
                     sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZÄÖÜ])', para)
                 for sentence in [sent for sent in sentences if sent.strip()]:
-                    data = self.client.classify_segment(sentence[:5000])
+                    try:
+                        data = self.client.classify_segment(sentence[:5000])
+                    except OpenAIError as e:
+                        # Transienter API-/Netzfehler → nicht abbrechen, Satz durchwinken
+                        logger.warning(
+                            "Klassifikation uebersprungen (API-Fehler): %s", e
+                        )
+                        data = {
+                            "label": "Fakt",
+                            "keep": True,
+                            "reason": "fallback_after_error",
+                        }
+                    except Exception as e:
+                        logger.warning(
+                            "Klassifikation uebersprungen (Fehler): %s", e
+                        )
+                        data = {
+                            "label": "Fakt",
+                            "keep": True,
+                            "reason": "fallback_after_error",
+                        }
                     label = data.get("label", "Fakt")
                     keep_flag = bool(data.get("keep", True))
                     if not keep_flag:
