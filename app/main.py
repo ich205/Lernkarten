@@ -6,9 +6,10 @@ aus einem Skript heraus verwendet werden kann.
 """
 
 from __future__ import annotations
-import os, sys, threading
+import os, sys, threading, time, re
 from tkinter import (
     filedialog,
+    simpledialog,
     StringVar,
     IntVar,
     BooleanVar,
@@ -81,6 +82,7 @@ class App:
         self._pause_event = threading.Event()
         self._pause_event.set()
         self._total_pages = 0
+        self.export_title: str | None = None
 
         self.build_ui()
         if source in {"config", "file"}:
@@ -298,6 +300,12 @@ class App:
         if not self.api_key.get().strip():
             ToastNotification(title=APP_TITLE, message="Bitte OpenAI API-Key eingeben (wird nicht gespeichert).", bootstyle="danger").show_toast()
             return
+        title = simpledialog.askstring(
+            "Titel der Lernkarten",
+            "Titel für den Export (optional):",
+            parent=self.root,
+        )
+        self.export_title = title.strip() if title else None
         self._stop_flag = False
         self._pause_event.set()
         self.progress_bar.configure(value=0, maximum=len(self._segments))
@@ -428,8 +436,13 @@ class App:
                 raise
 
             # Export
-            out_path = os.path.join(os.path.dirname(__file__), "..", "output.xlsx")
-            out_path = os.path.abspath(out_path)
+            export_dir = os.path.join(os.path.dirname(__file__), "..", "exports")
+            os.makedirs(export_dir, exist_ok=True)
+            timestamp = time.strftime("%Y%m%d_%H%M")
+            title = self.export_title or "Lernkarten"
+            title = re.sub(r"[^A-Za-z0-9_-]+", "_", title)
+            filename = f"{title}_{timestamp}.xlsx"
+            out_path = os.path.abspath(os.path.join(export_dir, filename))
             pipe.export_excel(rows, out_path)
             self.progress.set(f"Fertig. Export: {out_path}")
             self.logln(f"Exportiert nach: {out_path}")
