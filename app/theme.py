@@ -21,8 +21,8 @@ THEME_FILE = os.path.abspath(
 def _minsize_for_screen(root: tk.Tk) -> tuple[int, int]:
     """Mindestgröße relativ zur Bildschirmauflösung."""
     w, h = root.winfo_screenwidth(), root.winfo_screenheight()
-    min_w = max(800, int(w * 0.6))
-    min_h = max(520, int(h * 0.6))
+    min_w = int(w * 0.6)
+    min_h = int(h * 0.6)
     return min_w, min_h
 
 def make_root(title: str = "GSA Flashcards", theme: str = DEFAULT_THEME) -> tb.Window:
