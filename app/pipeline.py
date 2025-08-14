@@ -46,6 +46,12 @@ class LernkartenPipeline:
 
         raw = extract_text_from_pdf(path)
         chunks = segment_text(raw)
+        # Filter obvious table-of-contents segments like "Inhaltsverzeichnis" or
+        # "Glossar" early so that they never reach the classifier.  Those
+        # headings typically do not contain meaningful learning content.
+        from .segment_filters import is_outline_segment
+
+        chunks = [c for c in chunks if not is_outline_segment(c)]
         return [Segment(text=c) for c in chunks]
 
     def classify(
