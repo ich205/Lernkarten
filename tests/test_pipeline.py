@@ -79,3 +79,41 @@ def test_generate_cards_skips_empty_items(monkeypatch):
     )
 
     assert rows == []
+
+
+def test_generate_cards_scales_with_budget(monkeypatch):
+    settings = OpenAISettings(api_key="test")
+    pipeline = LernkartenPipeline(settings)
+
+    # Simuliere lange Segmente, sodass viele Fragen moeglich waeren
+    monkeypatch.setattr(pipeline.tok, "count", lambda text: 1500)
+
+    called_with: list[int] = []
+
+    def fake_gen(text, n_questions, language):
+        called_with.append(n_questions)
+        return [QAItem("f", "a")] * n_questions
+
+    monkeypatch.setattr(pipeline.client, "gen_qa_for_chunk", fake_gen)
+
+    # Kostenschaetzung fixieren
+    monkeypatch.setattr(
+        pipeline,
+        "estimate_cost",
+        lambda *args, **kwargs: {"sum_usd": 5},
+    )
+
+    segments = [Segment("eins"), Segment("zwei")]
+    adjusted: list[int] = []
+
+    pipeline.generate_cards(
+        segments,
+        max_questions_per_chunk=10,
+        language="de",
+        budget_usd=2.0,
+        limit_by_budget=True,
+        adjust_cb=lambda v: adjusted.append(v),
+    )
+
+    assert called_with == [4, 4]
+    assert adjusted == [4]
