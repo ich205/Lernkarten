@@ -242,7 +242,8 @@ class LernkartenPipeline:
                 i, s = futures[fut]
                 try:
                     items: List[QAItem] = fut.result()
-                except Exception:
+                except Exception as e:
+                    logger.warning("OpenAI-Fehler: %s", e)
                     items = None
                 if not items:
                     if progress_cb:
