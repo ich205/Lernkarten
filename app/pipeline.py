@@ -140,6 +140,9 @@ class LernkartenPipeline:
         pause_event: Any | None = None,
         card_cb: Optional[Callable[[str, str, str], None]] = None,
         max_workers: int = 3,
+        budget_usd: float | None = None,
+        limit_by_budget: bool = False,
+        adjust_cb: Optional[Callable[[int], None]] = None,
     ) -> List[CardRow]:
         """Generiert Lernkarten dynamisch je nach Segmentlänge.
 
@@ -148,6 +151,32 @@ class LernkartenPipeline:
         rows: List[CardRow] = []
         card_count = 0
         total = len(segments)
+
+        if limit_by_budget and budget_usd and budget_usd > 0:
+            kept = [s for s in segments if s.keep]
+            if kept:
+                token_counts = [self.tok.count(s.text) for s in kept]
+                seg_avg = int(sum(token_counts) / len(token_counts))
+                est = self.estimate_cost(
+                    "",
+                    len(kept),
+                    seg_avg,
+                    max_questions_per_chunk,
+                    self.settings.classify_model,
+                    self.settings.qa_model,
+                )
+                total_cost = est.get("sum_usd", 0.0)
+                if total_cost > budget_usd:
+                    factor = budget_usd / total_cost
+                    scaled = max(1, int(max_questions_per_chunk * factor))
+                    if scaled < max_questions_per_chunk:
+                        max_questions_per_chunk = scaled
+                        if adjust_cb:
+                            adjust_cb(scaled)
+                        logger.info(
+                            "Fragen pro Segment automatisch auf %s reduziert, um Budget einzuhalten.",
+                            scaled,
+                        )
 
         # --- Sequenziell: kleine Inputs oder Parallelisierung deaktiviert ---
         if total < 4 or max_workers <= 1:
