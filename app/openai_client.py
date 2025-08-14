@@ -1,10 +1,7 @@
-"""Höhere Abstraktion der OpenAI-API.
-
-`OpenAIClient` kapselt die eigentlichen API-Aufrufe und kümmert sich um
-Initialisierung, Fehlerbehandlung und JSON-Modus. Die Klassen und Methoden
-werden von `pipeline.LernkartenPipeline` genutzt und greifen auf Werte aus
-``config.toml`` zurück (`DEFAULT_*`).
-"""
+"""Höhere Abstraktion der OpenAI-API. `OpenAIClient` kapselt die eigentlichen API-Aufrufe
+und kümmert sich um Initialisierung, Fehlerbehandlung und JSON-Modus. Die Klassen und
+Methoden werden von `pipeline.LernkartenPipeline` genutzt und greifen auf Werte aus
+`config.toml` zurück (`DEFAULT_*`)."""
 
 from __future__ import annotations
 from typing import List, Dict, Any, Optional, Callable
@@ -15,9 +12,11 @@ import time
 from .pipeline_models import QAItem
 
 try:  # pragma: no cover - optional dependency
-    from openai import OpenAIError
+    from openai import OpenAIError, BadRequestError
 except ImportError:  # pragma: no cover
     OpenAIError = Exception  # type: ignore
+    # Fallback: wenn das konkrete Fehlerklasse-Symbol nicht existiert, gleiche Behandlung
+    BadRequestError = OpenAIError  # type: ignore
 
 from .config import (
     DEFAULT_CLASSIFY_MODEL,
@@ -50,6 +49,30 @@ def safe_request(call: Callable[..., Any], *args, **kwargs):
         try:
             return call(*args, **kwargs)
         except Exception as e:  # pragma: no cover - network errors hard to test
+            # Bekannter, nicht-transienter Fehler: temperature wird vom Modell nicht unterstützt
+            # (z. B. o1/o3/o4-mini → nur Standardwert 1 erlaubt).
+            # -> verständliche Meldung erzeugen und ggf. einmal ohne temperature neu versuchen.
+            try:
+                is_bad_req = isinstance(e, BadRequestError)
+            except Exception:
+                is_bad_req = False
+            msg = str(e)
+            if is_bad_req and ("unsupported_value" in msg and "temperature" in msg):
+                # Einmal automatisch ohne 'temperature' neu versuchen, falls übergeben:
+                if "temperature" in kwargs:
+                    new_kwargs = dict(kwargs)
+                    new_kwargs.pop("temperature", None)
+                    try:
+                        return call(*args, **new_kwargs)
+                    except Exception:
+                        pass  # fällt unten auf die aussagekräftige Meldung zurück
+                friendly = (
+                    "Bekannter Fehlercode: unsupported_value (temperature). "
+                    "Dieses Modell akzeptiert keinen frei wählbaren 'temperature'-Wert; "
+                    "nur der Standard (1) ist erlaubt. Lösung: 'temperature' nicht setzen "
+                    "oder auf 1.0 stellen."
+                )
+                raise RuntimeError(f"{friendly}\nOriginal: {msg}") from e
             if _is_transient(e) and attempt < _MAX_RETRIES - 1:
                 retry_after = getattr(e, "retry_after", None)
                 sleep = float(retry_after or (_BASE_BACKOFF * (2**attempt)))
@@ -106,7 +129,7 @@ class OpenAIClient:
         resp = safe_request(
             client.chat.completions.create,
             model=self.settings.classify_model,
-            temperature=0.0,
+            # WICHTIG: manche Modelle erlauben nur den Default (1) → temperature nicht setzen
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
