@@ -12,11 +12,35 @@ import time
 from .pipeline_models import QAItem
 
 try:  # pragma: no cover - optional dependency
-    from openai import OpenAIError, BadRequestError
+    from openai import (
+        OpenAIError,
+        BadRequestError,
+        APIConnectionError,
+        APITimeoutError,
+    )
 except ImportError:  # pragma: no cover
     OpenAIError = Exception  # type: ignore
-    # Fallback: wenn das konkrete Fehlerklasse-Symbol nicht existiert, gleiche Behandlung
     BadRequestError = OpenAIError  # type: ignore
+
+    class APIConnectionError(OpenAIError):  # type: ignore
+        """Fallbackklasse bei fehlendem openai-Paket."""
+
+        pass
+
+    class APITimeoutError(OpenAIError):  # type: ignore
+        """Fallbackklasse bei fehlendem openai-Paket."""
+
+        pass
+
+# optionale Low-Level-Transport-Errors
+try:
+    import httpx  # type: ignore
+except Exception:  # pragma: no cover
+    httpx = None  # type: ignore
+try:
+    import httpcore  # type: ignore
+except Exception:  # pragma: no cover
+    httpcore = None  # type: ignore
 
 from .config import (
     DEFAULT_CLASSIFY_MODEL,
@@ -33,12 +57,33 @@ _BASE_BACKOFF = float(_cfg["models"].get("base_backoff_seconds", 1.0))
 
 
 def _is_transient(e: Exception) -> bool:
+    """Gibt True zurück, wenn sich ein erneuter Versuch lohnt (temporärer Fehler)."""
+
+    # Netzwerk-/Timeoutfehler vom OpenAI-SDK sind transient
+    if isinstance(e, (APIConnectionError, APITimeoutError)):
+        return True
+
     code = getattr(e, "status_code", None)
     if isinstance(e, OpenAIError) and code == 429:
-        err_msg = str(e)
-        if "insufficient_quota" in err_msg or "exceeded your current quota" in err_msg:
+        msg = str(e)
+        if "insufficient_quota" in msg or "exceeded your current quota" in msg:
             return False
-    return isinstance(e, OpenAIError) and code in (429, 500, 502, 503, 504)
+        return True
+    if isinstance(e, OpenAIError) and code in (500, 502, 503, 504):
+        return True
+    # Tieferliegende Transport-/Protokollfehler (Keep-Alive abgebrochen etc.)
+    if httpx and isinstance(
+        e,
+        (
+            httpx.TimeoutException,
+            httpx.TransportError,
+            getattr(httpx, "RemoteProtocolError", tuple()),
+        ),
+    ):
+        return True
+    if httpcore and isinstance(e, getattr(httpcore, "RemoteProtocolError", tuple())):
+        return True
+    return False
 
 
 def safe_request(call: Callable[..., Any], *args, **kwargs):
@@ -105,7 +150,13 @@ class OpenAIClient:
                     "Das 'openai'-Paket ist nicht installiert. Bitte fuehre "
                     "'python install.py' aus (oder starte ueber 'run.bat')."
                 ) from e
-            self._client = OpenAI(api_key=self.settings.api_key, max_retries=0)
+            # SDK-Retries bleiben 0 (wir steuern sie selbst in safe_request),
+            # aber ein sinnvoller Default-Timeout kommt aus der Config.
+            self._client = OpenAI(
+                api_key=self.settings.api_key,
+                max_retries=0,
+                timeout=_REQ_TIMEOUT,
+            )
         return self._client
 
     def classify_segment(self, text: str) -> Dict[str, Any]:
