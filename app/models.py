@@ -45,7 +45,6 @@ def call_json_chat(model: str, system_prompt: str, user_prompt: str, temperature
             {"role": "user", "content": user_prompt},
         ],
         temperature=temperature,
-        response_format={"type": "json_object"},
         max_tokens=max_output_tokens,
     )
     raw = response.choices[0].message.content

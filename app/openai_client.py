@@ -185,7 +185,6 @@ class OpenAIClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            response_format={"type": "json_object"},
         )
         content = resp.choices[0].message.content
         try:
@@ -221,7 +220,6 @@ class OpenAIClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            response_format={"type": "json_object"},
         )
         content = resp.choices[0].message.content
         try:
