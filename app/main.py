@@ -360,6 +360,20 @@ class App:
                     f"{len(filtered)} verbleiben."
                 )
 
+                # Warten auf Bestaetigung vor der Kartenerstellung
+                ToastNotification(
+                    title=APP_TITLE,
+                    message=(
+                        "Labeln fertig. Bitte pruefen und 'Fortsetzen' klicken, um die Lernkarten zu erzeugen."
+                    ),
+                    bootstyle="info",
+                ).show_toast()
+                self.progress.set("Warten auf Bestaetigung …")
+                self._pause_event.clear()
+                while not self._pause_event.wait(timeout=0.5):
+                    if self._stop_flag:
+                        return
+
                 # Lernkarten
                 self.progress.set("Erzeuge Lernkarten …")
                 self.logln("Fragen/Antworten werden generiert …")
