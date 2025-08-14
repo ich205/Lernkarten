@@ -218,12 +218,15 @@ class App:
 
         try:
             from .pdf_ingest import extract_text_from_pdf, segment_text
+            from .segment_filters import is_outline_segment
             from .pipeline_models import Segment
             from pypdf import PdfReader
 
             txt = extract_text_from_pdf(path)
             self._full_text = txt
             segs = segment_text(txt)
+            # Verzeichnisse wie "Inhaltsverzeichnis" oder "Glossar" ignorieren
+            segs = [s for s in segs if not is_outline_segment(s)]
             # Wandelt jeden Textabschnitt in ein Segment-Objekt um:
             self._segments = [Segment(text=s) for s in segs]
             # Save segments to a text file for reference
@@ -352,6 +355,14 @@ class App:
                     for i, s in enumerate(seg_objs, start=1):
                         label = getattr(s, "label", "")
                         f.write(f"[{label}] {s.text}\n\n")
+
+                from .segment_filters import is_outline_segment, looks_like_outline_list
+
+                for s in seg_objs:
+                    text = s.text.strip()
+                    label = getattr(s, "label", "")
+                    if is_outline_segment(text) or looks_like_outline_list(text, label):
+                        s.keep = False
 
                 filtered = [s for s in seg_objs if s.keep]
                 removed = len(seg_objs) - len(filtered)
