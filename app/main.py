@@ -26,8 +26,11 @@ from ttkbootstrap.toast import ToastNotification
 from app.theme import make_root, attach_theme_toggle
 from pypdf.errors import PdfReadError
 try:
+    import openai
     from openai import OpenAIError
 except ImportError:  # pragma: no cover - fallback if openai not installed
+    from types import SimpleNamespace
+    openai = SimpleNamespace(APIStatusError=Exception)  # type: ignore
     OpenAIError = Exception
 
 from .config import (
@@ -334,51 +337,70 @@ class App:
                 self.progress_bar.configure(value=i, maximum=total)
                 self.progress.set(f"Klassifikation {i}/{total}")
 
-            seg_objs = pipe.classify(
-                seg_objs,
-                progress_cb=cls_cb,
-                stop_cb=lambda: self._stop_flag,
-                pause_event=self._pause_event,
-            )
-            # Save labeled text passages to a file for reference
-            labeled_path = os.path.join(os.path.dirname(__file__), "..", "labeled_passages.txt")
-            labeled_path = os.path.abspath(labeled_path)
-            with open(labeled_path, "w", encoding="utf-8") as f:
-                for i, s in enumerate(seg_objs, start=1):
-                    label = getattr(s, "label", "")
-                    f.write(f"[{label}] {s.text}\n\n")
+            rows = []
+            try:
+                seg_objs = pipe.classify(
+                    seg_objs,
+                    progress_cb=cls_cb,
+                    stop_cb=lambda: self._stop_flag,
+                    pause_event=self._pause_event,
+                )
+                # Save labeled text passages to a file for reference
+                labeled_path = os.path.join(os.path.dirname(__file__), "..", "labeled_passages.txt")
+                labeled_path = os.path.abspath(labeled_path)
+                with open(labeled_path, "w", encoding="utf-8") as f:
+                    for i, s in enumerate(seg_objs, start=1):
+                        label = getattr(s, "label", "")
+                        f.write(f"[{label}] {s.text}\n\n")
 
-            filtered = [s for s in seg_objs if s.keep]
-            removed = len(seg_objs) - len(filtered)
-            self.logln(
-                f"Gefiltert: {removed} Segmente verworfen (Ueberschrift/Gliederung/Vorwort). "
-                f"{len(filtered)} verbleiben."
-            )
-
-            # Lernkarten
-            self.progress.set("Erzeuge Lernkarten …")
-            self.logln("Fragen/Antworten werden generiert …")
-            self.progress_bar.configure(value=0, maximum=len(filtered))
-
-            def gen_cb(i, total, card_count):
-                self.progress_bar.configure(value=i, maximum=total)
-                page = int((i / max(1, total)) * self._total_pages) + 1 if self._total_pages else i
-                self.progress.set(
-                    f"Segment {i}/{total} (Seite ~{page}) – Karten {card_count}"
+                filtered = [s for s in seg_objs if s.keep]
+                removed = len(seg_objs) - len(filtered)
+                self.logln(
+                    f"Gefiltert: {removed} Segmente verworfen (Ueberschrift/Gliederung/Vorwort). "
+                    f"{len(filtered)} verbleiben."
                 )
 
-            def card_cb(orig, frage, antwort):
-                self.update_preview(orig, frage, antwort)
+                # Lernkarten
+                self.progress.set("Erzeuge Lernkarten …")
+                self.logln("Fragen/Antworten werden generiert …")
+                self.progress_bar.configure(value=0, maximum=len(filtered))
 
-            rows = pipe.generate_cards(
-                filtered,
-                self.questions_per_chunk.get(),
-                self.language.get(),
-                progress_cb=gen_cb,
-                stop_cb=lambda: self._stop_flag,
-                pause_event=self._pause_event,
-                card_cb=card_cb,
-            )
+                def gen_cb(i, total, card_count):
+                    self.progress_bar.configure(value=i, maximum=total)
+                    page = int((i / max(1, total)) * self._total_pages) + 1 if self._total_pages else i
+                    self.progress.set(
+                        f"Segment {i}/{total} (Seite ~{page}) – Karten {card_count}"
+                    )
+
+                def card_cb(orig, frage, antwort):
+                    self.update_preview(orig, frage, antwort)
+
+                rows = pipe.generate_cards(
+                    filtered,
+                    self.questions_per_chunk.get(),
+                    self.language.get(),
+                    progress_cb=gen_cb,
+                    stop_cb=lambda: self._stop_flag,
+                    pause_event=self._pause_event,
+                    card_cb=card_cb,
+                )
+            except openai.APIStatusError as e:
+                msg = str(e)
+                if e.status_code == 429 and (
+                    "insufficient_quota" in msg or "exceeded your current quota" in msg
+                ):
+                    self.progress.set(
+                        "Fehler: Kein Guthaben/Budget im OpenAI-Projekt. Bitte Billing/Usage prüfen."
+                    )
+                    ToastNotification(
+                        title=APP_TITLE,
+                        message=(
+                            "OpenAI: insufficient_quota (429). Konto/Budget auf dem Dashboard freischalten."
+                        ),
+                        bootstyle="danger",
+                    ).show_toast()
+                    return
+                raise
 
             # Export
             out_path = os.path.join(os.path.dirname(__file__), "..", "output.xlsx")
@@ -386,7 +408,11 @@ class App:
             pipe.export_excel(rows, out_path)
             self.progress.set(f"Fertig. Export: {out_path}")
             self.logln(f"Exportiert nach: {out_path}")
-            ToastNotification(title=APP_TITLE, message=f"Fertig! Datei gespeichert:\n{out_path}", bootstyle="success").show_toast()
+            ToastNotification(
+                title=APP_TITLE,
+                message=f"Fertig! Datei gespeichert:\n{out_path}",
+                bootstyle="success",
+            ).show_toast()
         except (OSError, ValueError, RuntimeError, OpenAIError) as e:
             logger.exception("Fehler in der Pipeline")
             ToastNotification(

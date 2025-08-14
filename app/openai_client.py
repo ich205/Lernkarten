@@ -82,7 +82,7 @@ class OpenAIClient:
                     "Das 'openai'-Paket ist nicht installiert. Bitte fuehre "
                     "'python install.py' aus (oder starte ueber 'run.bat')."
                 ) from e
-            self._client = OpenAI(api_key=self.settings.api_key)
+            self._client = OpenAI(api_key=self.settings.api_key, max_retries=0)
         return self._client
 
     def classify_segment(self, text: str) -> Dict[str, Any]:
