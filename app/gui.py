@@ -82,8 +82,8 @@ def run_gui():
 
     left = tb.Labelframe(center, text="Quelle & Einstellungen", padding=10)
     right = tb.Notebook(center)
-    center.add(left, weight=1, minsize=320)
-    center.add(right, weight=3, minsize=480)
+    center.add(left, weight=1)
+    center.add(right, weight=3)
 
     for c in range(2):
         left.columnconfigure(c, weight=1)
