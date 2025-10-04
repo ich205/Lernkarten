@@ -25,6 +25,7 @@ from ttkbootstrap import ttk
 from ttkbootstrap.scrolled import ScrolledText
 from ttkbootstrap.toast import ToastNotification
 from app.theme import make_root, attach_theme_toggle
+from app.paths import state_dir
 from pypdf.errors import PdfReadError
 try:
     import openai
@@ -100,7 +101,7 @@ class App:
         self.root.rowconfigure(0, weight=1)
 
         # Row 0: Datei
-        ttk.Label(frm, text="Skript (PDF):").grid(row=0, column=0, sticky=W)
+        ttk.Label(frm, text="Skript (PDF/TXT):").grid(row=0, column=0, sticky=W)
         ttk.Entry(frm, textvariable=self.file_path).grid(row=0, column=1, sticky=(E,W))
         ttk.Button(frm, text="Auswaehlen…", command=self.pick_file).grid(row=0, column=2, padx=5)
         frm.columnconfigure(1, weight=1)
@@ -183,7 +184,7 @@ class App:
     def pick_file(self):
         p = filedialog.askopenfilename(
             title="Skript waehlen (PDF)",
-            filetypes=[("PDF", "*.pdf"), ("Alle Dateien", "*.*")]
+            filetypes=[("PDF", "*.pdf"), ("Text", "*.txt"), ("Alle Dateien", "*.*")]
         )
         if p:
             self.file_path.set(p)
@@ -213,7 +214,7 @@ class App:
     def segment_and_estimate(self):
         path = self.file_path.get().strip()
         if not path or not os.path.exists(path):
-            ToastNotification(title=APP_TITLE, message="Bitte eine PDF-Datei waehlen.", bootstyle="danger").show_toast()
+            ToastNotification(title=APP_TITLE, message="Bitte eine PDF- oder Text-Datei waehlen.", bootstyle="danger").show_toast()
             return
         self.progress.set("Lese & segmentiere ...")
         self.root.update()
@@ -224,22 +225,33 @@ class App:
             from .pipeline_models import Segment
             from pypdf import PdfReader
 
-            txt = extract_text_from_pdf(path)
+            _, ext = os.path.splitext(path)
+            if ext.lower() == ".txt":
+                with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                    txt = fh.read()
+            else:
+                txt = extract_text_from_pdf(path)
             self._full_text = txt
             segs = segment_text(txt)
             # Verzeichnisse wie "Inhaltsverzeichnis" oder "Glossar" ignorieren
             segs = [s for s in segs if not is_outline_segment(s)]
+            if not segs:
+                ToastNotification(
+                    title=APP_TITLE,
+                    message="Keine verwertbaren Segmente gefunden.",
+                    bootstyle="warning",
+                ).show_toast()
+                self.progress.set("Keine Segmente.")
+                self._segments = None
+                return
             # Wandelt jeden Textabschnitt in ein Segment-Objekt um:
             self._segments = [Segment(text=s) for s in segs]
-            # Save segments to a text file for reference
-            segments_path = os.path.join(os.path.dirname(__file__), "..", "segments.txt")
-            segments_path = os.path.abspath(segments_path)
-            with open(segments_path, "w", encoding="utf-8") as f:
-                for i, segment_text in enumerate(segs, start=1):
-                    f.write(f"Segment {i}:\n{segment_text}\n\n")
             try:
-                reader = PdfReader(path)
-                self._total_pages = len(reader.pages)
+                if ext.lower() == ".pdf":
+                    reader = PdfReader(path)
+                    self._total_pages = len(reader.pages)
+                else:
+                    self._total_pages = 0
             except (PdfReadError, OSError):
                 self._total_pages = 0
             self.logln(f"Segmentiert: {len(segs)} Segmente.")
@@ -356,13 +368,6 @@ class App:
                     stop_cb=lambda: self._stop_flag,
                     pause_event=self._pause_event,
                 )
-                # Save labeled text passages to a file for reference
-                labeled_path = os.path.join(os.path.dirname(__file__), "..", "labeled_passages.txt")
-                labeled_path = os.path.abspath(labeled_path)
-                with open(labeled_path, "w", encoding="utf-8") as f:
-                    for i, s in enumerate(seg_objs, start=1):
-                        label = getattr(s, "label", "")
-                        f.write(f"[{label}] {s.text}\n\n")
 
                 from .segment_filters import is_outline_segment, looks_like_outline_list
 
@@ -378,6 +383,14 @@ class App:
                     f"Gefiltert: {removed} Segmente verworfen (Ueberschrift/Gliederung/Vorwort). "
                     f"{len(filtered)} verbleiben."
                 )
+                if not filtered:
+                    self.progress.set("Keine relevanten Segmente.")
+                    ToastNotification(
+                        title=APP_TITLE,
+                        message="Alle Segmente wurden als Vorwort/Gliederung verworfen.",
+                        bootstyle="warning",
+                    ).show_toast()
+                    return
 
                 # Warten auf Bestaetigung vor der Kartenerstellung
                 ToastNotification(
@@ -436,8 +449,7 @@ class App:
                 raise
 
             # Export
-            export_dir = os.path.join(os.path.dirname(__file__), "..", "exports")
-            os.makedirs(export_dir, exist_ok=True)
+            export_dir = state_dir("exports")
             timestamp = time.strftime("%Y%m%d_%H%M")
             title = self.export_title or "Lernkarten"
             title = re.sub(r"[^A-Za-z0-9_-]+", "_", title)

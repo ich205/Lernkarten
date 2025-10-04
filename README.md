@@ -16,8 +16,14 @@ und CSV (z. B. für Anki).
 - **Budgetschutz**: Verarbeitung stoppt rechtzeitig oder skaliert die Gründlichkeit herunter.
 - **Cache**: Ergebnisse pro Segment werden gehasht und wiederverwendet.
 - **Exports**: Excel (`.xlsx`) mit Spalten: *Original*, *Frage*, *Antwort*, *Labels*, *Quelle*;
-  zusätzlich CSV‑Export für Flashcards.
-- **Installer‑Pfad**: `install.py` (ZIP-Entpacken, venv + requirements) und **PyInstaller**‑Skript für Windows.
+  zusätzlich CSV-Export für Flashcards.
+- **Installer-Pfad**: `install.py` (ZIP-Entpacken, venv + requirements) und **PyInstaller**-Skript für Windows.
+- **Agenten-Flow**: Segmentierung, Klassifikation, QA und Export laufen über
+  dedizierte Agenten mit eigenen Auftragsablagen. Jede Stufe holt sich Aufgaben
+  aus der eigenen Inbox, verarbeitet sie und reicht Ergebnisse an die nächste
+  Instanz weiter.
+- **Dashboard**: Die GUI zeigt live an, welcher Agent aktiv ist, wie viele
+  Aufgaben jede Queue enthält und wohin Ergebnisse weitergereicht werden.
 
 ## Schnellstart
 1. **Python 3.10+** installieren.
@@ -25,6 +31,8 @@ und CSV (z. B. für Anki).
    ```bash
    python install.py
    ```
+   > Alternativ: `python -m venv .venv && source .venv/bin/activate`
+   > sowie `pip install -r installer/requirements.txt`
 3. Starten:
  - Windows: `run.bat`
   - macOS/Linux: `chmod +x run.sh && ./run.sh`
@@ -33,9 +41,18 @@ und CSV (z. B. für Anki).
 ## Quick-Checkliste
 
 - `config.toml` im UTF‑8‑Format (ohne BOM) anlegen; erste Zeile `[auth]`.
-- Modell‑IDs auf reale OpenAI‑Modelle setzen, z. B. `gpt-4o`, `gpt-4o-mini`, `o4-mini`.
+- Modell‑IDs auf reale OpenAI‑Modelle setzen, z. B. `gpt-4o`, `gpt-4o-mini`, `o4-mini`.
 - `pdfplumber` installieren (für zuverlässige PDF‑Textextraktion).
 - Anwendung neu starten (`run.bat` oder `run.sh`).
+- Installation prüfen: Mit vorhandenem `.venv` genügt `pip install -r installer/requirements.txt`.
+
+## Datenablage & Cache
+- Logs, Cache und Exporte werden pro Nutzer im OS-üblichen Verzeichnis abgelegt (z. B.
+  unter `~/.local/share/Lernkarten` bzw. `%APPDATA%\Lernkarten`).
+- Die QA-Antworten werden gehasht im Cache gespeichert. Wiederholte Läufe mit
+  unverändertem Material sparen dadurch API-Kosten.
+- Exportierte Excel-Dateien landen standardmäßig im Unterordner `exports` des
+  Anwendungsdaten-Verzeichnisses bzw. in dem Pfad, den Sie in der GUI angeben.
 
 ### API‑Schlüssel bereitstellen
 

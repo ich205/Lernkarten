@@ -6,11 +6,19 @@ Textabschnitten abzuschätzen.
 """
 
 from __future__ import annotations
-from typing import Iterable, Optional
+from typing import Iterable
 
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
+_WARNINGS_EMITTED: set[str] = set()
+
+
+def _warn_once(key: str, message: str) -> None:
+    if key in _WARNINGS_EMITTED:
+        return
+    logger.warning(message)
+    _WARNINGS_EMITTED.add(key)
 
 def approximate_token_count(text: str) -> int:
     """
@@ -39,9 +47,9 @@ class Tokenizer:
                     self._enc = None
         except ImportError:
             self._enc = None
-            logger.warning("tiktoken nicht installiert; heuristische Tokenisierung wird verwendet")
+            _warn_once("no_tiktoken", "tiktoken nicht installiert; heuristische Tokenisierung wird verwendet")
         if self._enc is None:
-            logger.warning("tiktoken konnte keine Encoding laden; heuristische Tokenisierung wird verwendet")
+            _warn_once("no_encoding", "tiktoken konnte keine Encoding laden; heuristische Tokenisierung wird verwendet")
 
     def count(self, text: str) -> int:
         if self._enc is None:
@@ -49,7 +57,7 @@ class Tokenizer:
         try:
             return len(self._enc.encode(text or ""))
         except ValueError:
-            logger.warning("Fehler bei der Tokenisierung, falle auf Heuristik zurueck")
+            _warn_once("tokenize_error", "Fehler bei der Tokenisierung, falle auf Heuristik zurueck")
             return approximate_token_count(text)
 
     def count_all(self, texts: Iterable[str]) -> int:

@@ -5,7 +5,6 @@ import venv
 import platform
 import zipfile
 import stat
-import re
 
 from app.logging_utils import get_logger
 
@@ -43,19 +42,6 @@ def ensure_extracted():
     return HERE
 
 
-def packages_installed(pip_cmd, requirements):
-    for req in requirements:
-        name = re.split(r"[<>=!\[]", req, 1)[0]
-        result = subprocess.run(
-            pip_cmd + ["show", name],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if result.returncode != 0:
-            return False
-    return True
-
-
 def install_requirements(base_dir):
     venv_dir = os.path.join(base_dir, ".venv")
     if not os.path.exists(venv_dir):
@@ -69,22 +55,17 @@ def install_requirements(base_dir):
     )
     pip_cmd = [python, "-m", "pip"]
 
-    basics = ["pip", "setuptools", "wheel"]
-    if packages_installed(pip_cmd, basics):
-        logger.info("Grundlegende Pakete bereits installiert.")
-    else:
-        logger.info("Aktualisiere pip …")
-        subprocess.check_call(pip_cmd + ["install", "-U"] + basics)
+    logger.info("Aktualisiere pip/setuptools/wheel …")
+    subprocess.check_call(pip_cmd + ["install", "--upgrade", "pip", "setuptools", "wheel"])
 
     req_file = os.path.join(base_dir, "installer", "requirements.txt")
     with open(req_file, encoding="utf-8") as fh:
         reqs = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
-
-    if packages_installed(pip_cmd, reqs):
-        logger.info("Requirements bereits installiert.")
-    else:
-        logger.info("Installiere Requirements …")
+    if reqs:
+        logger.info("Installiere Projekt-Abhängigkeiten …")
         subprocess.check_call(pip_cmd + ["install", "-r", req_file])
+    else:
+        logger.info("Keine zusätzlichen Requirements im Installer-Verzeichnis gefunden.")
 
     return venv_dir
 
