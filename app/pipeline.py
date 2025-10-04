@@ -10,7 +10,11 @@ from __future__ import annotations
 from typing import List, Dict, Any, Tuple, Callable, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+import hashlib
+import json
 import re
+from pathlib import Path
 from .tokenizer_utils import Tokenizer
 from .logging_utils import get_logger
 try:
@@ -19,8 +23,17 @@ except Exception:  # pragma: no cover
     OpenAIError = Exception  # type: ignore
 logger = get_logger(__name__)
 
-from .config import PRICES, ESTIMATE
+from .config import PRICES, ESTIMATE, DEFAULT_LANGUAGE, load_config, Price
+from .agents import (
+    Task,
+    TaskQueue,
+    SegmentAgent,
+    ClassificationAgent,
+    QaAgent,
+    ExportAgent,
+)
 from .openai_client import OpenAIClient, OpenAISettings
+from .cache import SegmentCache
 from .pdf_ingest import extract_text_from_pdf, segment_text
 from .excel_export import to_excel
 from .pipeline_models import Segment, QAItem, CardRow
@@ -32,10 +45,19 @@ class CostBreakdown:
     usd: float
 
 class LernkartenPipeline:
-    def __init__(self, settings: OpenAISettings):
+    def __init__(
+        self,
+        settings: OpenAISettings,
+        *,
+        cache: SegmentCache | None = None,
+        cache_enabled: bool = True,
+    ):
         self.settings = settings
         self.client = OpenAIClient(settings)
         self.tok = Tokenizer()
+        self.cache = cache if cache is not None else SegmentCache(
+            "qa_results", enabled=cache_enabled
+        )
 
     def load_and_segment(self, path: str) -> List[Segment]:
         """Liest eine PDF ein und segmentiert sie in grobe Abschnitte.
@@ -44,7 +66,10 @@ class LernkartenPipeline:
         erfolgt nur eine heuristische Absatz-Zerlegung über `pdf_ingest.segment_text`.
         """
 
-        raw = extract_text_from_pdf(path)
+        if path.lower().endswith(".txt"):
+            raw = Path(path).read_text(encoding="utf-8", errors="ignore")
+        else:
+            raw = extract_text_from_pdf(path)
         chunks = segment_text(raw)
         # Filter obvious table-of-contents segments like "Inhaltsverzeichnis" or
         # "Glossar" early so that they never reach the classifier.  Those
@@ -197,29 +222,23 @@ class LernkartenPipeline:
                     pause_event.wait()
                 tokens = self.tok.count(s.text)
                 n_questions = max(1, min(max_questions_per_chunk, tokens // 100))
-                items: List[QAItem] = self.client.gen_qa_for_chunk(
-                    s.text[:8000], n_questions, language=language
-                )
+                cache_key = self._qa_cache_key(s.text, n_questions, language)
+                items = self._cache_get(cache_key)
+                if items is None:
+                    items = self.client.gen_qa_for_chunk(
+                        s.text[:8000], n_questions, language=language
+                    )
+                    if items:
+                        self._cache_set(cache_key, items)
                 if not items:
                     if progress_cb:
                         progress_cb(i, total, card_count)
                     continue
-                fragen: List[str] = []
-                antworten: List[str] = []
-                for x in items:
-                    fragen.append(x.frage)
-                    antworten.append(x.antwort)
-                    if card_cb:
+                if card_cb:
+                    for x in items:
                         card_cb(s.text, x.frage, x.antwort)
                 card_count += len(items)
-                rows.append(
-                    CardRow(
-                        original=s.text,
-                        fragen=fragen,
-                        antworten=antworten,
-                        labels=[s.label] if getattr(s, "label", None) else [],
-                    )
-                )
+                rows.append(self._build_row(s, items))
                 if progress_cb:
                     progress_cb(i, total, card_count)
             return rows
@@ -227,7 +246,7 @@ class LernkartenPipeline:
         # --- Parallel: groessere Inputs ---
         indexed_rows: Dict[int, CardRow] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
-            futures: Dict[Any, Tuple[int, Segment]] = {}
+            futures: Dict[Any, Tuple[int, Segment, str]] = {}
             for i, s in enumerate(segments, 1):
                 if stop_cb and stop_cb():
                     raise RuntimeError("Abgebrochen")
@@ -239,13 +258,24 @@ class LernkartenPipeline:
                     pause_event.wait()
                 tokens = self.tok.count(s.text)
                 n_questions = max(1, min(max_questions_per_chunk, tokens // 100))
+                cache_key = self._qa_cache_key(s.text, n_questions, language)
+                cached_items = self._cache_get(cache_key)
+                if cached_items is not None:
+                    if card_cb:
+                        for x in cached_items:
+                            card_cb(s.text, x.frage, x.antwort)
+                    card_count += len(cached_items)
+                    indexed_rows[i] = self._build_row(s, cached_items)
+                    if progress_cb:
+                        progress_cb(i, total, card_count)
+                    continue
                 fut = ex.submit(
                     self.client.gen_qa_for_chunk, s.text[:8000], n_questions, language
                 )
-                futures[fut] = (i, s)
+                futures[fut] = (i, s, cache_key)
 
             for fut in as_completed(futures):
-                i, s = futures[fut]
+                i, s, cache_key = futures[fut]
                 try:
                     items: List[QAItem] = fut.result()
                 except Exception as e:
@@ -255,20 +285,12 @@ class LernkartenPipeline:
                     if progress_cb:
                         progress_cb(i, total, card_count)
                     continue
-                fragen: List[str] = []
-                antworten: List[str] = []
-                for x in items:
-                    fragen.append(x.frage)
-                    antworten.append(x.antwort)
-                    if card_cb:
+                self._cache_set(cache_key, items)
+                if card_cb:
+                    for x in items:
                         card_cb(s.text, x.frage, x.antwort)
                 card_count += len(items)
-                indexed_rows[i] = CardRow(
-                    original=s.text,
-                    fragen=fragen,
-                    antworten=antworten,
-                    labels=[s.label] if getattr(s, "label", None) else [],
-                )
+                indexed_rows[i] = self._build_row(s, items)
                 if progress_cb:
                     progress_cb(i, total, card_count)
 
@@ -278,6 +300,120 @@ class LernkartenPipeline:
         return rows
 
     # === Kosten-Schaetzung ===
+    def run(
+        self,
+        path: str,
+        *,
+        out_dir: str,
+        max_questions_per_chunk: int = 8,
+        language: str | None = None,
+        budget_usd: float | None = None,
+        limit_by_budget: bool = False,
+        stop_cb: Optional[Callable[[], bool]] = None,
+        pause_event: Any | None = None,
+        progress_cb: Optional[Callable[[str, int, int, int], None]] = None,
+        status_cb: Optional[Callable[[str], None]] = None,
+        log_cb: Optional[Callable[[str], None]] = None,
+        card_cb: Optional[Callable[[str, str, str], None]] = None,
+        export_title: str | None = None,
+        agent_state_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> str:
+        """High-level orchestration used by the GUI via chained agents."""
+
+        lang = (language or DEFAULT_LANGUAGE).strip() or DEFAULT_LANGUAGE
+        cfg = load_config()
+        model_cfg = cfg.get("models", {})
+        max_workers_cfg = int(model_cfg.get("max_parallel_requests", 3) or 3)
+        export_dir_abs = os.path.abspath(out_dir)
+        os.makedirs(export_dir_abs, exist_ok=True)
+
+        context: Dict[str, Any] = {
+            "pipeline": self,
+            "stop_cb": stop_cb or (lambda: False),
+            "pause_event": pause_event,
+            "progress_cb": progress_cb,
+            "status_cb": status_cb,
+            "log_cb": log_cb,
+            "card_cb": card_cb,
+            "export_dir": export_dir_abs,
+            "logger": logger,
+            "max_workers": max_workers_cfg,
+            "agent_state_cb": agent_state_cb,
+        }
+
+        segment_queue = TaskQueue("segment")
+        classify_queue = TaskQueue("classify")
+        qa_queue = TaskQueue("qa")
+        export_queue = TaskQueue("export")
+
+        initial_payload = {
+            "path": path,
+            "export_title": export_title,
+            "max_questions_per_chunk": max_questions_per_chunk,
+            "language": lang,
+            "budget_usd": budget_usd,
+            "limit_by_budget": bool(limit_by_budget and budget_usd and budget_usd > 0),
+        }
+        segment_queue.add(Task(name="segment", payload=initial_payload))
+
+        agents = [
+            SegmentAgent("segment", segment_queue, classify_queue),
+            ClassificationAgent("classify", classify_queue, qa_queue),
+            QaAgent("qa", qa_queue, export_queue),
+            ExportAgent("export", export_queue, None),
+        ]
+
+        if agent_state_cb:
+            for agent in agents:
+                agent_state_cb(
+                    {
+                        "agent": agent.name,
+                        "status": "ready",
+                        "task": None,
+                        "inbox": agent.inbox.size(),
+                        "outbox": agent.outbox.size() if agent.outbox else 0,
+                        "inbox_name": agent.inbox.name,
+                        "outbox_name": agent.outbox.name if agent.outbox else "",
+                    }
+                )
+
+        while True:
+            pending = any(agent.has_pending() for agent in agents)
+            if not pending:
+                break
+
+            any_processed = False
+            for agent in agents:
+                if not agent.has_pending():
+                    continue
+                processed = agent.poll(context)
+                if processed:
+                    any_processed = True
+            if not any_processed:
+                break
+
+        if agent_state_cb:
+            for agent in agents:
+                agent_state_cb(
+                    {
+                        "agent": agent.name,
+                        "status": "idle",
+                        "task": None,
+                        "inbox": agent.inbox.size(),
+                        "outbox": agent.outbox.size() if agent.outbox else 0,
+                        "inbox_name": agent.inbox.name,
+                        "outbox_name": agent.outbox.name if agent.outbox else "",
+                    }
+                )
+
+        if context.get("result"):
+            return context["result"]
+
+        stop_requested = context["stop_cb"]() if callable(context.get("stop_cb")) else False
+        if stop_requested:
+            raise RuntimeError("Abgebrochen")
+        raise RuntimeError("Export fehlgeschlagen – kein Ergebnis vorhanden.")
+
     def estimate_cost(
         self,
         full_text: str,
@@ -290,8 +426,8 @@ class LernkartenPipeline:
         """
         Sehr grobe Schaetzung – passt die Konstanten in config.ESTIMATE an.
         """
-        prices_c = PRICES[classify_model]
-        prices_q = PRICES[qa_model]
+        prices_c = self._price_for(classify_model)
+        prices_q = self._price_for(qa_model)
 
         # Klassifikation
         cls_in = n_segments * (ESTIMATE["classify_prompt_overhead"] + seg_avg_tokens)
@@ -327,6 +463,90 @@ class LernkartenPipeline:
 
     def export_excel(self, rows: List[CardRow], out_path: str) -> None:
         to_excel(rows, out_path)
+
+    # --- cache helpers ------------------------------------------------------
+    def _qa_cache_key(self, text: str, n_questions: int, language: str) -> str:
+        payload = json.dumps(
+            {
+                "text": text,
+                "n": n_questions,
+                "lang": language,
+                "model": self.settings.qa_model,
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def _cache_get(self, key: str) -> List[QAItem] | None:
+        if not self.cache:
+            return None
+        raw = self.cache.get(key)
+        if not raw:
+            return None
+        items: List[QAItem] = []
+        for entry in raw:
+            frage = entry.get("frage")
+            antwort = entry.get("antwort")
+            if not isinstance(frage, str) or not isinstance(antwort, str):
+                continue
+            labels = entry.get("labels")
+            if labels is not None and not isinstance(labels, list):
+                labels = None
+            items.append(QAItem(frage=frage, antwort=antwort, labels=labels))
+        return items or None
+
+    def _cache_set(self, key: str, items: List[QAItem]) -> None:
+        if not self.cache or not items:
+            return
+        serialisable = [
+            {
+                "frage": i.frage,
+                "antwort": i.antwort,
+                "labels": i.labels,
+            }
+            for i in items
+        ]
+        self.cache.set(key, serialisable)
+
+    def _build_row(self, segment: Segment, items: List[QAItem]) -> CardRow:
+        fragen = [x.frage for x in items]
+        antworten = [x.antwort for x in items]
+        labels = [segment.label] if getattr(segment, "label", None) else []
+        merged_labels = list(labels)
+        # attach optional metadata from QA items if present
+        for item in items:
+            if item.labels:
+                merged_labels.extend(str(lbl) for lbl in item.labels if lbl)
+        unique_labels: List[str] = []
+        seen: set[str] = set()
+        for lbl in merged_labels:
+            if lbl not in seen:
+                seen.add(lbl)
+                unique_labels.append(lbl)
+        return CardRow(
+            original=segment.text,
+            fragen=fragen,
+            antworten=antworten,
+            labels=unique_labels,
+        )
+
+    def _price_for(self, model_id: str) -> Price:
+        if model_id in PRICES:
+            return PRICES[model_id]
+
+        cfg = load_config()
+        costs = cfg.get("costs", {})
+        key = model_id.replace(".", "-")
+        try:
+            return Price(
+                float(costs[f"{key}_input_usd_per_mtok"]),
+                float(costs.get(f"{key}_cached_input_usd_per_mtok", 0.0)),
+                float(costs[f"{key}_output_usd_per_mtok"]),
+            )
+        except KeyError as exc:
+            raise ValueError(
+                f"Kostenangaben für Modell '{model_id}' fehlen in config.toml"
+            ) from exc
 
 
 # Übergangs-Alias für alte Imports, bitte mittelfristig entfernen:

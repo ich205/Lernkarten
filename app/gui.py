@@ -12,6 +12,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog
 import webbrowser
+from typing import Any, Dict
 import ttkbootstrap as tb
 from ttkbootstrap.tooltip import ToolTip
 from ttkbootstrap.toast import ToastNotification
@@ -22,8 +23,9 @@ try:
 except ImportError:  # pragma: no cover - fallback if openai not installed
     OpenAIError = Exception
 
-from .config import load_config, load_api_key
+from .config import load_config, load_api_key, DEFAULT_LANGUAGE
 from .pipeline import LernkartenPipeline
+from .openai_client import OpenAISettings
 from .cost import estimate_cost_for_text
 from .pdf_utils import try_extract_text
 from .models import count_tokens_rough
@@ -157,12 +159,49 @@ def run_gui():
     tab_preview = tb.Frame(right, padding=8)
     tab_log = tb.Frame(right, padding=0)
     tab_export = tb.Frame(right, padding=8)
+    tab_agents = tb.Frame(right, padding=8)
     right.add(tab_preview, text="Vorschau")
     right.add(tab_log, text="Log")
     right.add(tab_export, text="Export")
+    right.add(tab_agents, text="Agenten")
 
     log_widget = ScrolledText(tab_log, wrap="word")
     log_widget.pack(fill="both", expand=True)
+
+    agent_tree = ttk.Treeview(
+        tab_agents,
+        columns=("agent", "status", "source", "target", "task", "forwarded"),
+        show="headings",
+        bootstyle="info",
+    )
+    agent_tree.heading("agent", text="Agent")
+    agent_tree.heading("status", text="Status")
+    agent_tree.heading("source", text="Quelle (Queue)")
+    agent_tree.heading("target", text="Ziel (Queue)")
+    agent_tree.heading("task", text="Letzte Aufgabe")
+    agent_tree.heading("forwarded", text="Weitergegeben")
+    agent_tree.column("agent", width=120)
+    agent_tree.column("status", width=120, anchor="center")
+    agent_tree.column("source", width=160)
+    agent_tree.column("target", width=160)
+    agent_tree.column("task", width=160)
+    agent_tree.column("forwarded", width=120, anchor="center")
+    agent_tree.pack(fill="both", expand=True)
+    agent_tree.tag_configure("active", bootstyle="warning")
+    agent_tree.tag_configure("forwarded", bootstyle="success")
+
+    tb.Label(tab_preview, text="Originalausschnitt").pack(anchor="w")
+    preview_orig = ScrolledText(tab_preview, wrap="word", height=8)
+    preview_orig.pack(fill="x", expand=False, pady=(0, 8))
+    tb.Label(tab_preview, text="Frage").pack(anchor="w")
+    preview_question = ScrolledText(tab_preview, wrap="word", height=5)
+    preview_question.pack(fill="x", expand=False, pady=(0, 8))
+    tb.Label(tab_preview, text="Antwort").pack(anchor="w")
+    preview_answer = ScrolledText(tab_preview, wrap="word", height=5)
+    preview_answer.pack(fill="x", expand=False)
+
+    for widget in (preview_orig, preview_question, preview_answer):
+        widget.configure(state="disabled")
 
     # Status bar
     status = tb.Frame(root, padding=(10,6))
@@ -173,11 +212,39 @@ def run_gui():
     progress.grid(row=0, column=1, sticky="e", padx=6)
 
     # ===== Functions =====
+    agent_rows: dict[str, str] = {}
+    agent_data: dict[str, dict[str, Any]] = {}
+
+    def reset_agent_dashboard() -> None:
+        nonlocal agent_rows, agent_data
+        for item in agent_tree.get_children():
+            agent_tree.delete(item)
+        agent_rows = {}
+        agent_data = {}
+
     def log(msg: str) -> None:
         log_widget.insert("end", msg + "\n")
         log_widget.see("end")
         if int(log_widget.index('end-1c').split('.')[0]) > LOG_MAX_LINES:
             log_widget.delete("1.0", "2.0")
+
+    def update_preview(original: str, question: str, answer: str) -> None:
+        snippet = original.strip()
+        if len(snippet) > 500:
+            snippet = snippet[:500] + "…"
+
+        def _apply() -> None:
+            for widget, value in (
+                (preview_orig, snippet),
+                (preview_question, question.strip()),
+                (preview_answer, answer.strip()),
+            ):
+                widget.configure(state="normal")
+                widget.delete("1.0", "end")
+                widget.insert("end", value)
+                widget.configure(state="disabled")
+
+        root.after(0, _apply)
 
     def choose_file() -> None:
         p = filedialog.askopenfilename(filetypes=[("PDF/TXT","*.pdf *.txt"), ("Alle Dateien","*.*")])
@@ -192,6 +259,86 @@ def run_gui():
     def open_export() -> None:
         p = out_dir_var.get().strip() or "."
         webbrowser.open(os.path.abspath(p))
+
+    stop_event = threading.Event()
+    current_worker: dict[str, threading.Thread | None] = {"thread": None}
+
+    def set_running(running: bool) -> None:
+        if running:
+            stop_event.clear()
+            progress.configure(mode="determinate", value=0)
+            btn_start.configure(state="disabled")
+            btn_abort.configure(text="Abbrechen")
+            update_preview("", "", "")
+            reset_agent_dashboard()
+        else:
+            stop_event.clear()
+            btn_start.configure(state="normal")
+            btn_abort.configure(text="Schließen")
+            progress.configure(value=0)
+            status_var.set("Bereit")
+
+    def thread_log(msg: str) -> None:
+        root.after(0, lambda: log(msg))
+
+    def thread_status(msg: str) -> None:
+        root.after(0, lambda: status_var.set(msg))
+
+    def thread_progress(phase: str, current: int, total: int, cards: int) -> None:
+        def _apply() -> None:
+            maximum = max(total, 1)
+            value = min(max(current, 0), maximum)
+            progress.configure(mode="determinate", maximum=maximum, value=value)
+            if phase == "export":
+                progress.configure(value=maximum)
+
+        root.after(0, _apply)
+
+    def agent_state_update(info: Dict[str, Any]) -> None:
+        def _apply() -> None:
+            name = info.get("agent", "")
+            if not name:
+                return
+            state = agent_data.get(name, {}).copy()
+            state.update(info)
+            if "forwarded" not in info:
+                state["forwarded"] = None
+            agent_data[name] = state
+
+            source = state.get("inbox_name", state.get("inbox_queue", state.get("inbox", "")))
+            target = state.get("outbox_name", state.get("outbox_queue", state.get("outbox", "")))
+            inbox_count = state.get("inbox", 0)
+            outbox_count = state.get("outbox", 0)
+            display_source = f"{source} ({inbox_count})" if source else f"({inbox_count})"
+            display_target = f"{target} ({outbox_count})" if target else f"({outbox_count})"
+            task = state.get("task") or "—"
+            forwarded = state.get("forwarded")
+            forwarded_display = str(forwarded) if forwarded is not None else "—"
+            status = state.get("status", "")
+            values = (
+                name,
+                status,
+                display_source,
+                display_target,
+                task,
+                forwarded_display,
+            )
+
+            row_id = agent_rows.get(name)
+            if row_id is None:
+                row_id = agent_tree.insert("", "end", iid=None, values=values)
+                agent_rows[name] = row_id
+            else:
+                agent_tree.item(row_id, values=values)
+
+            tags = []
+            if status == "active":
+                tags.append("active")
+            elif status == "forwarded":
+                tags.append("forwarded")
+            agent_tree.item(row_id, tags=tags)
+
+        root.after(0, _apply)
 
     def estimate() -> None:
         p = file_path_var.get().strip()
@@ -210,53 +357,120 @@ def run_gui():
         log(f"  Label‑Kosten (Nano)≈ ${est['cost_label_usd']:.4f}  | QA‑Kosten ({model})≈ ${est['cost_qa_usd']:.4f}  | Gesamt≈ ${est['total_cost_usd']:.4f}")
 
     def start() -> None:
-        p = file_path_var.get().strip()
-        if not p:
+        worker = current_worker.get("thread")
+        if worker and worker.is_alive():
+            ToastNotification(
+                title="Läuft",
+                message="Die Verarbeitung läuft bereits.",
+                bootstyle="info",
+            ).show_toast()
+            return
+
+        path = file_path_var.get().strip()
+        if not path:
             ToastNotification(title="Fehler", message="Bitte Datei wählen.", bootstyle="danger").show_toast()
             return
+
         api = api_key_var.get().strip()
         if not api:
             api, _ = load_api_key(cfg)
         if not api:
             ToastNotification(title="Fehler", message="Bitte API‑Key eingeben (nur für diese Sitzung).", bootstyle="danger").show_toast()
             return
-        outd = out_dir_var.get().strip() or "."
-        os.makedirs(outd, exist_ok=True)
-        pipeline = LernkartenPipeline(
-            api_key=api,
-            qa_model=model_var.get(),
-            label_model=label_model_var.get(),
-            use_cache=use_cache_var.get(),
-            budget_usd=float(budget_var.get() or 0),
-            limit_by_budget=limit_by_budget_var.get(),
-            questions_per_chunk=thorough_var.get(),
-            ui_logger=log,
-            ui_progress=lambda v: progress.configure(value=v),
-            ui_status=lambda s: status_var.set(s),
-        )
-        def worker():
+
+        out_dir = out_dir_var.get().strip() or "."
+        os.makedirs(out_dir, exist_ok=True)
+
+        try:
+            budget_raw = float(budget_var.get() or 0.0)
+        except ValueError:
+            budget_raw = 0.0
+        limit_flag = bool(limit_by_budget_var.get() and budget_raw > 0)
+        budget_arg: float | None = budget_raw if limit_flag else None
+
+        questions = int(thorough_var.get())
+        language_pref = cfg.get("prompting", {}).get("language", DEFAULT_LANGUAGE)
+
+        set_running(True)
+        status_var.set("Initialisiere …")
+        log(f"[START] {os.path.basename(path)}")
+
+        def worker_fn() -> None:
             try:
-                out = pipeline.run(p, out_dir=outd)
+                settings = OpenAISettings(
+                    api_key=api,
+                    classify_model=label_model_var.get(),
+                    qa_model=model_var.get(),
+                )
+                pipeline = LernkartenPipeline(
+                    settings,
+                    cache_enabled=bool(use_cache_var.get()),
+                )
+                export_path = pipeline.run(
+                    path,
+                    out_dir=out_dir,
+                    max_questions_per_chunk=questions,
+                    language=language_pref,
+                    budget_usd=budget_arg,
+                    limit_by_budget=limit_flag,
+                    stop_cb=stop_event.is_set,
+                    progress_cb=thread_progress,
+                    status_cb=thread_status,
+                    log_cb=thread_log,
+                    card_cb=update_preview,
+                    export_title=os.path.splitext(os.path.basename(path))[0],
+                    agent_state_cb=agent_state_update,
+                )
                 root.after(
                     0,
                     lambda: ToastNotification(
-                        title="Fertig", message=f"Export erstellt:\n{out}"
+                        title="Fertig",
+                        message=f"Export erstellt:\n{export_path}",
+                        bootstyle="success",
                     ).show_toast(),
                 )
             except (OSError, ValueError, RuntimeError, OpenAIError) as ex:
-                logger.exception("Fehler bei der Pipeline-Ausführung")
-                log(f"[FEHLER] {ex}")
-                root.after(
-                    0,
-                    lambda: ToastNotification(
-                        title="Fehler",
-                        message=f"{ex.__class__.__name__}: {ex}",
-                        bootstyle="danger",
-                    ).show_toast(),
-                )
-        threading.Thread(target=worker, daemon=True).start()
+                if isinstance(ex, RuntimeError) and str(ex) == "Abgebrochen":
+                    thread_log("[INFO] Verarbeitung abgebrochen.")
+                    root.after(
+                        0,
+                        lambda: ToastNotification(
+                            title="Abgebrochen",
+                            message="Die Verarbeitung wurde gestoppt.",
+                            bootstyle="warning",
+                        ).show_toast(),
+                    )
+                else:
+                    logger.exception("Fehler bei der Pipeline-Ausführung")
+                    thread_log(f"[FEHLER] {ex}")
+                    root.after(
+                        0,
+                        lambda: ToastNotification(
+                            title="Fehler",
+                            message=f"{ex.__class__.__name__}: {ex}",
+                            bootstyle="danger",
+                        ).show_toast(),
+                    )
+            finally:
+                root.after(0, lambda: set_running(False))
+                current_worker["thread"] = None
+
+        worker = threading.Thread(target=worker_fn, daemon=True)
+        current_worker["thread"] = worker
+        worker.start()
+
+    def abort() -> None:
+        worker = current_worker.get("thread")
+        if worker and worker.is_alive():
+            if not stop_event.is_set():
+                stop_event.set()
+                thread_log("[INFO] Abbruch angefordert …")
+                thread_status("Abbruch angefordert …")
+        else:
+            on_close()
 
     def on_close() -> None:
+        stop_event.set()
         api_key_var.set("")
         root.destroy()
 
@@ -266,7 +480,9 @@ def run_gui():
     btn_out.configure(command=choose_out)
     btn_est.configure(command=estimate)
     btn_start.configure(command=start)
-    btn_abort.configure(command=on_close)
+    btn_abort.configure(command=abort)
+
+    set_running(False)
 
     root.bind("<Control-o>", lambda e: choose_file())
     root.bind("<Control-r>", lambda e: start())

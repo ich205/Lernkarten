@@ -224,17 +224,49 @@ class OpenAIClient:
         content = resp.choices[0].message.content
         try:
             data = json.loads(content)
-            if isinstance(data, dict) and "items" in data:
-                items = data["items"]
-            else:
-                items = data
-            out: List[QAItem] = []
-            for it in items:
-                q = (it.get("frage") or it.get("question") or "").strip()
-                a = (it.get("antwort") or it.get("answer") or "").strip()
-                if q and a:
-                    out.append(QAItem(frage=q, antwort=a))
-            return out
-        except (json.JSONDecodeError, KeyError, TypeError):
+        except json.JSONDecodeError:
             logger.warning("Failed to parse QA response: %r", content)
             return []
+
+        if isinstance(data, dict):
+            if "items" in data:
+                items = data["items"]
+            elif "questions" in data:
+                items = data["questions"]
+            else:
+                items = data
+        else:
+            items = data
+
+        if not isinstance(items, list):
+            logger.warning("Unexpected QA response structure: %r", data)
+            return []
+
+        out: List[QAItem] = []
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            q = (
+                raw.get("frage")
+                or raw.get("question")
+                or raw.get("q")
+                or ""
+            ).strip()
+            a = (
+                raw.get("antwort")
+                or raw.get("answer")
+                or raw.get("a")
+                or ""
+            ).strip()
+            if not (q and a):
+                continue
+            labels = []
+            for key in ("type", "difficulty"):
+                val = raw.get(key)
+                if isinstance(val, str) and val.strip():
+                    labels.append(f"{key}:{val.strip()}")
+            note = raw.get("notes") or raw.get("note")
+            if isinstance(note, str) and note.strip():
+                labels.append(f"note:{note.strip()}")
+            out.append(QAItem(frage=q, antwort=a, labels=labels or None))
+        return out
